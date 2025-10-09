@@ -1,0 +1,28 @@
+# Travel Booking Platform - Development Dependencies
+# Include all production dependencies
+-r requirements.txt
+
+# Development Tools
+jupyter==1.0.0
+ipython==8.17.2
+
+# API Testing
+httpx==0.25.2
+requests==2.31.0
+
+# Database Testing
+pytest-postgresql==5.0.0
+factory-boy==3.3.0
+
+# Code Coverage
+coverage==7.3.2
+coverage-badge==1.1.0
+
+# Documentation
+mkdocs==1.5.3
+mkdocs-material==9.4.8
+mkdocstrings[python]==0.24.0
+
+# Development Utilities
+watchdog==3.0.0
+python-dotenv==1.0.0

@@ -1,0 +1,330 @@
+"""
+Authentication API Endpoints
+
+This module defines FastAPI endpoints for authentication operations:
+- User registration and login
+- Token refresh and logout
+- User profile management
+- Password change functionality
+"""
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from sqlalchemy.ext.asyncio import AsyncSession
+from typing import Dict, Any
+from datetime import timedelta
+
+from app.core.database import get_database_session
+from app.core.security import SecurityManager
+from app.auth.models import User
+from app.auth.schemas import (
+    UserRegisterRequest, UserLoginRequest, TokenResponse,
+    RefreshTokenRequest, UserProfileResponse, UserProfileUpdate,
+    PasswordChangeRequest
+)
+from app.auth.services import AuthService
+from app.core.config import settings
+
+# Router for authentication endpoints
+router = APIRouter(prefix="/auth", tags=["Authentication"])
+
+# HTTP Bearer token scheme
+security = HTTPBearer()
+
+
+async def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: AsyncSession = Depends(get_database_session)
+) -> User:
+    """
+    Get current authenticated user from JWT token.
+    
+    This dependency extracts the user from the JWT token and returns
+    the user object for use in protected endpoints.
+    
+    Args:
+        credentials: HTTP Bearer token credentials
+        db: Database session
+        
+    Returns:
+        User: Current authenticated user
+        
+    Raises:
+        HTTPException: If token is invalid or user not found
+    """
+    token = credentials.credentials
+    payload = SecurityManager.verify_token(token, "access")
+    
+    user_id = payload.get("sub")
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token payload",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    auth_service = AuthService(db)
+    user = await auth_service.get_user_by_id(int(user_id))
+    
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Inactive user"
+        )
+    
+    return user
+
+
+async def get_current_admin_user(current_user: User = Depends(get_current_user)) -> User:
+    """
+    Get current user and verify admin role.
+    
+    This dependency ensures only admin users can access admin endpoints.
+    
+    Args:
+        current_user: Current authenticated user
+        
+    Returns:
+        User: Current authenticated admin user
+        
+    Raises:
+        HTTPException: If user is not an admin
+    """
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required"
+        )
+    return current_user
+
+
+@router.post("/register", response_model=UserProfileResponse, status_code=status.HTTP_201_CREATED)
+async def register_user(
+    user_data: UserRegisterRequest,
+    db: AsyncSession = Depends(get_database_session)
+):
+    """
+    Register a new user in the system.
+    
+    Creates a new user account with the provided information.
+    Agents require additional company and PAN information.
+    
+    Args:
+        user_data: User registration data
+        db: Database session
+        
+    Returns:
+        UserProfileResponse: Created user information
+        
+    Raises:
+        HTTPException: If email already exists or validation fails
+    """
+    auth_service = AuthService(db)
+    user = await auth_service.register_user(user_data)
+    return UserProfileResponse.from_orm(user)
+
+
+@router.post("/login", response_model=TokenResponse)
+async def login_user(
+    login_data: UserLoginRequest,
+    db: AsyncSession = Depends(get_database_session)
+):
+    """
+    Authenticate user and return JWT tokens.
+    
+    Validates user credentials and returns access and refresh tokens
+    for authenticated sessions.
+    
+    Args:
+        login_data: User login credentials
+        db: Database session
+        
+    Returns:
+        TokenResponse: JWT access and refresh tokens
+        
+    Raises:
+        HTTPException: If credentials are invalid
+    """
+    auth_service = AuthService(db)
+    user = await auth_service.authenticate_user(login_data)
+    
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect email or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    # Create tokens
+    token_data = {"sub": str(user.id), "email": user.email, "role": user.role.value}
+    
+    access_token = SecurityManager.create_access_token(
+        data=token_data,
+        expires_delta=timedelta(minutes=settings.access_token_expire_minutes)
+    )
+    
+    refresh_token = SecurityManager.create_refresh_token(data=token_data)
+    
+    return TokenResponse(
+        access_token=access_token,
+        refresh_token=refresh_token,
+        expires_in=settings.access_token_expire_minutes * 60
+    )
+
+
+@router.post("/refresh", response_model=Dict[str, Any])
+async def refresh_access_token(
+    refresh_data: RefreshTokenRequest,
+    db: AsyncSession = Depends(get_database_session)
+):
+    """
+    Refresh access token using refresh token.
+    
+    Exchanges a valid refresh token for a new access token.
+    
+    Args:
+        refresh_data: Refresh token request
+        db: Database session
+        
+    Returns:
+        Dict: New access token and expiration time
+        
+    Raises:
+        HTTPException: If refresh token is invalid
+    """
+    payload = SecurityManager.verify_token(refresh_data.refresh_token, "refresh")
+    
+    user_id = payload.get("sub")
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid refresh token payload",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    # Verify user still exists and is active
+    auth_service = AuthService(db)
+    user = await auth_service.get_user_by_id(int(user_id))
+    
+    if not user or not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found or inactive",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    # Create new access token
+    token_data = {"sub": str(user.id), "email": user.email, "role": user.role.value}
+    access_token = SecurityManager.create_access_token(
+        data=token_data,
+        expires_delta=timedelta(minutes=settings.access_token_expire_minutes)
+    )
+    
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "expires_in": settings.access_token_expire_minutes * 60
+    }
+
+
+@router.post("/logout")
+async def logout_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security)
+):
+    """
+    Logout user by blacklisting the access token.
+    
+    Adds the current access token to the blacklist to prevent
+    further use until it naturally expires.
+    
+    Args:
+        credentials: HTTP Bearer token credentials
+        
+    Returns:
+        Dict: Logout confirmation message
+    """
+    token = credentials.credentials
+    payload = SecurityManager.verify_token(token, "access")
+    
+    # Get token expiration time
+    exp_timestamp = payload.get("exp")
+    if exp_timestamp:
+        from datetime import datetime
+        expires_at = datetime.fromtimestamp(exp_timestamp)
+        SecurityManager.blacklist_token(token, expires_at)
+    
+    return {"message": "Successfully logged out"}
+
+
+@router.get("/me", response_model=UserProfileResponse)
+async def get_current_user_profile(current_user: User = Depends(get_current_user)):
+    """
+    Get current user's profile information.
+    
+    Returns the profile information of the currently authenticated user.
+    
+    Args:
+        current_user: Current authenticated user
+        
+    Returns:
+        UserProfileResponse: User profile information
+    """
+    return UserProfileResponse.from_orm(current_user)
+
+
+@router.put("/me", response_model=UserProfileResponse)
+async def update_current_user_profile(
+    profile_data: UserProfileUpdate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_database_session)
+):
+    """
+    Update current user's profile information.
+    
+    Allows users to update their name, phone, and address information.
+    
+    Args:
+        profile_data: Profile update data
+        current_user: Current authenticated user
+        db: Database session
+        
+    Returns:
+        UserProfileResponse: Updated user profile information
+    """
+    auth_service = AuthService(db)
+    updated_user = await auth_service.update_user_profile(current_user.id, profile_data)
+    return UserProfileResponse.from_orm(updated_user)
+
+
+@router.put("/me/password")
+async def change_password(
+    password_data: PasswordChangeRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_database_session)
+):
+    """
+    Change current user's password.
+    
+    Validates the current password and updates to the new password.
+    
+    Args:
+        password_data: Password change data
+        current_user: Current authenticated user
+        db: Database session
+        
+    Returns:
+        Dict: Success message
+        
+    Raises:
+        HTTPException: If current password is incorrect
+    """
+    auth_service = AuthService(db)
+    await auth_service.change_password(current_user.id, password_data)
+    return {"message": "Password changed successfully"}

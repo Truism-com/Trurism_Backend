@@ -1,0 +1,303 @@
+"""
+Booking Module Schemas
+
+This module defines Pydantic schemas for booking operations:
+- Booking request schemas for flights, hotels, and buses
+- Booking response schemas with confirmation details
+- Passenger and guest information schemas
+- Payment processing schemas
+- Booking status and cancellation schemas
+"""
+
+from pydantic import BaseModel, Field, validator
+from typing import Optional, List, Dict, Any
+from datetime import datetime, date
+from enum import Enum
+
+from app.booking.models import BookingStatus, PaymentMethod, PaymentStatus, PassengerType
+
+
+class PassengerSchema(BaseModel):
+    """
+    Schema for passenger information in bookings.
+    
+    Validates passenger details for flight, hotel, and bus bookings
+    including personal information and travel preferences.
+    """
+    name: str = Field(..., min_length=2, max_length=255, description="Passenger full name")
+    age: int = Field(..., ge=0, le=120, description="Passenger age")
+    type: PassengerType = Field(..., description="Passenger type (ADT, CHD, INF)")
+    passport_number: Optional[str] = Field(None, min_length=6, max_length=20, description="Passport number for international travel")
+    nationality: Optional[str] = Field(None, min_length=2, max_length=3, description="ISO country code")
+    phone: Optional[str] = Field(None, min_length=10, max_length=20, description="Contact phone number")
+    email: Optional[str] = Field(None, description="Contact email address")
+    
+    @validator('name')
+    def validate_name(cls, v):
+        """Validate passenger name format."""
+        if not v.replace(' ', '').replace('-', '').isalpha():
+            raise ValueError('Name should contain only letters, spaces, and hyphens')
+        return v.title()
+    
+    @validator('phone')
+    def validate_phone(cls, v):
+        """Validate phone number format."""
+        if v and not v.replace('+', '').replace('-', '').replace(' ', '').isdigit():
+            raise ValueError('Invalid phone number format')
+        return v
+
+
+class PaymentDetailsSchema(BaseModel):
+    """
+    Schema for payment information in bookings.
+    
+    Validates payment method and related details for processing
+    bookings with different payment options.
+    """
+    method: PaymentMethod = Field(..., description="Payment method")
+    card_number: Optional[str] = Field(None, description="Card number (masked)")
+    card_expiry: Optional[str] = Field(None, description="Card expiry date (MM/YY)")
+    card_cvv: Optional[str] = Field(None, min_length=3, max_length=4, description="Card CVV")
+    upi_id: Optional[str] = Field(None, description="UPI ID for UPI payments")
+    bank_name: Optional[str] = Field(None, description="Bank name for net banking")
+    wallet_type: Optional[str] = Field(None, description="Wallet type for wallet payments")
+    
+    @validator('card_number')
+    def validate_card_number(cls, v, values):
+        """Validate card number format."""
+        method = values.get('method')
+        if method == PaymentMethod.CARD and not v:
+            raise ValueError('Card number is required for card payments')
+        if v and not v.replace(' ', '').replace('-', '').isdigit():
+            raise ValueError('Invalid card number format')
+        return v
+    
+    @validator('upi_id')
+    def validate_upi_id(cls, v, values):
+        """Validate UPI ID format."""
+        method = values.get('method')
+        if method == PaymentMethod.UPI and not v:
+            raise ValueError('UPI ID is required for UPI payments')
+        if v and '@' not in v:
+            raise ValueError('Invalid UPI ID format')
+        return v
+
+
+class FlightBookingRequest(BaseModel):
+    """
+    Schema for flight booking requests.
+    
+    Validates flight booking data including passenger information,
+    flight details, and payment information.
+    """
+    offer_id: str = Field(..., description="Flight offer ID from search results")
+    passengers: List[PassengerSchema] = Field(..., min_items=1, max_items=9, description="List of passengers")
+    payment_details: PaymentDetailsSchema = Field(..., description="Payment information")
+    special_requests: Optional[str] = Field(None, max_length=500, description="Special requests or preferences")
+    contact_email: str = Field(..., description="Contact email for booking confirmation")
+    contact_phone: str = Field(..., min_length=10, max_length=20, description="Contact phone number")
+    
+    @validator('passengers')
+    def validate_passengers(cls, v):
+        """Validate passenger count and types."""
+        if len(v) > 9:
+            raise ValueError('Maximum 9 passengers allowed per booking')
+        
+        adult_count = sum(1 for p in v if p.type == PassengerType.ADULT)
+        if adult_count == 0:
+            raise ValueError('At least one adult passenger is required')
+        
+        infant_count = sum(1 for p in v if p.type == PassengerType.INFANT)
+        if infant_count > adult_count:
+            raise ValueError('Number of infants cannot exceed number of adults')
+        
+        return v
+
+
+class HotelBookingRequest(BaseModel):
+    """
+    Schema for hotel booking requests.
+    
+    Validates hotel booking data including guest information,
+    room details, and payment information.
+    """
+    hotel_id: str = Field(..., description="Hotel ID from search results")
+    checkin_date: date = Field(..., description="Check-in date")
+    checkout_date: date = Field(..., description="Check-out date")
+    rooms: int = Field(..., ge=1, le=9, description="Number of rooms")
+    adults: int = Field(..., ge=1, le=18, description="Number of adult guests")
+    children: int = Field(0, ge=0, le=18, description="Number of child guests")
+    guest_details: List[Dict[str, Any]] = Field(..., description="Guest information for each room")
+    payment_details: PaymentDetailsSchema = Field(..., description="Payment information")
+    special_requests: Optional[str] = Field(None, max_length=500, description="Special requests")
+    contact_email: str = Field(..., description="Contact email for booking confirmation")
+    contact_phone: str = Field(..., min_length=10, max_length=20, description="Contact phone number")
+    
+    @validator('checkout_date')
+    def validate_checkout_date(cls, v, values):
+        """Validate checkout date is after checkin date."""
+        if 'checkin_date' in values and v <= values['checkin_date']:
+            raise ValueError('Checkout date must be after checkin date')
+        return v
+    
+    @validator('guest_details')
+    def validate_guest_details(cls, v, values):
+        """Validate guest details match room count."""
+        rooms = values.get('rooms', 0)
+        if len(v) != rooms:
+            raise ValueError('Guest details must be provided for each room')
+        return v
+
+
+class BusBookingRequest(BaseModel):
+    """
+    Schema for bus booking requests.
+    
+    Validates bus booking data including passenger information,
+    journey details, and payment information.
+    """
+    bus_id: str = Field(..., description="Bus ID from search results")
+    travel_date: date = Field(..., description="Travel date")
+    passengers: int = Field(..., ge=1, le=9, description="Number of passengers")
+    passenger_details: List[PassengerSchema] = Field(..., description="Passenger information")
+    payment_details: PaymentDetailsSchema = Field(..., description="Payment information")
+    boarding_point: Optional[str] = Field(None, description="Preferred boarding point")
+    dropping_point: Optional[str] = Field(None, description="Preferred dropping point")
+    special_requests: Optional[str] = Field(None, max_length=500, description="Special requests")
+    contact_email: str = Field(..., description="Contact email for booking confirmation")
+    contact_phone: str = Field(..., min_length=10, max_length=20, description="Contact phone number")
+    
+    @validator('passenger_details')
+    def validate_passenger_details(cls, v, values):
+        """Validate passenger details match passenger count."""
+        passengers = values.get('passengers', 0)
+        if len(v) != passengers:
+            raise ValueError('Passenger details must match passenger count')
+        return v
+
+
+class BookingResponse(BaseModel):
+    """
+    Schema for booking confirmation responses.
+    
+    Returns booking confirmation details including reference numbers,
+    status, and payment information.
+    """
+    booking_id: int = Field(..., description="Unique booking ID")
+    booking_reference: str = Field(..., description="Booking reference number")
+    status: BookingStatus = Field(..., description="Current booking status")
+    confirmation_number: Optional[str] = Field(None, description="Confirmation number from provider")
+    total_amount: float = Field(..., ge=0, description="Total booking amount")
+    currency: str = Field(..., description="Currency code")
+    payment_status: PaymentStatus = Field(..., description="Payment status")
+    expires_at: Optional[datetime] = Field(None, description="Booking expiry time")
+    created_at: datetime = Field(..., description="Booking creation time")
+    
+    class Config:
+        from_attributes = True
+
+
+class FlightBookingResponse(BookingResponse):
+    """
+    Schema for flight booking confirmation responses.
+    
+    Extends base booking response with flight-specific details.
+    """
+    airline: str = Field(..., description="Airline name")
+    flight_number: str = Field(..., description="Flight number")
+    origin: str = Field(..., description="Origin airport code")
+    destination: str = Field(..., description="Destination airport code")
+    departure_time: datetime = Field(..., description="Departure time")
+    arrival_time: datetime = Field(..., description="Arrival time")
+    travel_class: str = Field(..., description="Travel class")
+    passenger_count: int = Field(..., description="Number of passengers")
+
+
+class HotelBookingResponse(BookingResponse):
+    """
+    Schema for hotel booking confirmation responses.
+    
+    Extends base booking response with hotel-specific details.
+    """
+    hotel_name: str = Field(..., description="Hotel name")
+    hotel_address: str = Field(..., description="Hotel address")
+    city: str = Field(..., description="City name")
+    checkin_date: datetime = Field(..., description="Check-in date")
+    checkout_date: datetime = Field(..., description="Check-out date")
+    nights: int = Field(..., description="Number of nights")
+    rooms: int = Field(..., description="Number of rooms")
+    adults: int = Field(..., description="Number of adults")
+    children: int = Field(..., description="Number of children")
+
+
+class BusBookingResponse(BookingResponse):
+    """
+    Schema for bus booking confirmation responses.
+    
+    Extends base booking response with bus-specific details.
+    """
+    operator: str = Field(..., description="Bus operator name")
+    bus_type: str = Field(..., description="Bus type")
+    origin: str = Field(..., description="Origin location")
+    destination: str = Field(..., description="Destination location")
+    departure_time: datetime = Field(..., description="Departure time")
+    arrival_time: datetime = Field(..., description="Arrival time")
+    travel_date: datetime = Field(..., description="Travel date")
+    passengers: int = Field(..., description="Number of passengers")
+
+
+class BookingListResponse(BaseModel):
+    """
+    Schema for paginated booking list responses.
+    
+    Returns a paginated list of user bookings with metadata.
+    """
+    total: int = Field(..., ge=0, description="Total number of bookings")
+    page: int = Field(..., ge=1, description="Current page number")
+    size: int = Field(..., ge=1, description="Number of bookings per page")
+    bookings: List[Dict[str, Any]] = Field(..., description="List of bookings")
+
+
+class BookingDetailsResponse(BaseModel):
+    """
+    Schema for detailed booking information responses.
+    
+    Returns comprehensive booking details including all relevant information.
+    """
+    booking_id: int = Field(..., description="Unique booking ID")
+    booking_reference: str = Field(..., description="Booking reference number")
+    type: str = Field(..., description="Booking type (flight, hotel, bus)")
+    status: BookingStatus = Field(..., description="Current booking status")
+    total_amount: float = Field(..., ge=0, description="Total booking amount")
+    currency: str = Field(..., description="Currency code")
+    payment_status: PaymentStatus = Field(..., description="Payment status")
+    details: Dict[str, Any] = Field(..., description="Booking-specific details")
+    passenger_details: List[Dict[str, Any]] = Field(..., description="Passenger information")
+    created_at: datetime = Field(..., description="Booking creation time")
+    updated_at: Optional[datetime] = Field(None, description="Last update time")
+
+
+class CancelBookingRequest(BaseModel):
+    """
+    Schema for booking cancellation requests.
+    
+    Validates cancellation reason and refund preferences.
+    """
+    reason: str = Field(..., min_length=10, max_length=500, description="Cancellation reason")
+    refund_preference: Optional[str] = Field(None, description="Refund method preference")
+    contact_for_refund: Optional[bool] = Field(True, description="Whether to contact for refund processing")
+
+
+class CancelBookingResponse(BaseModel):
+    """
+    Schema for booking cancellation responses.
+    
+    Returns cancellation confirmation and refund information.
+    """
+    booking_id: int = Field(..., description="Booking ID that was cancelled")
+    status: BookingStatus = Field(..., description="Updated booking status")
+    refund_amount: Optional[float] = Field(None, ge=0, description="Refund amount")
+    currency: str = Field(..., description="Currency code")
+    refund_processing_time: Optional[str] = Field(None, description="Expected refund processing time")
+    cancellation_fee: Optional[float] = Field(None, ge=0, description="Cancellation fee applied")
+    message: str = Field(..., description="Cancellation confirmation message")
