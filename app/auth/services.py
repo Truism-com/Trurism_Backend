@@ -73,6 +73,54 @@ class AuthService:
         await self.db.refresh(user)
         
         return user
+
+    async def create_refresh_token_record(self, user_id: int, token: str, expires_at: datetime):
+        """
+        Persist a refresh token in the database.
+        """
+        from app.auth.models import RefreshToken
+
+        rt = RefreshToken(
+            user_id=user_id,
+            token=token,
+            expires_at=expires_at,
+            is_revoked=False
+        )
+        self.db.add(rt)
+        await self.db.commit()
+        await self.db.refresh(rt)
+        return rt
+
+    async def verify_refresh_token(self, token: str) -> Optional[object]:
+        """
+        Verify that a refresh token exists, is not revoked and not expired.
+        Returns the RefreshToken row or None.
+        """
+        from app.auth.models import RefreshToken
+        result = await self.db.execute(
+            select(RefreshToken).where(RefreshToken.token == token)
+        )
+        rt = result.scalar_one_or_none()
+        if not rt:
+            return None
+        if rt.is_revoked:
+            return None
+        if rt.expires_at and rt.expires_at < datetime.utcnow():
+            return None
+        return rt
+
+    async def revoke_refresh_token(self, token: str) -> bool:
+        """
+        Mark a refresh token as revoked.
+        """
+        from app.auth.models import RefreshToken
+        result = await self.db.execute(select(RefreshToken).where(RefreshToken.token == token))
+        rt = result.scalar_one_or_none()
+        if not rt:
+            return False
+        rt.is_revoked = True
+        await self.db.commit()
+        return True
     
     async def authenticate_user(self, login_data: UserLoginRequest) -> Optional[User]:
         """

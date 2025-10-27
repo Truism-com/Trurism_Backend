@@ -7,6 +7,7 @@ It sets up the database connection, imports all models, and configures migration
 
 import asyncio
 from logging.config import fileConfig
+import os
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
@@ -23,6 +24,12 @@ from app.booking.models import (
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
+
+# Prefer DATABASE_URL or SQLALCHEMY_URL environment variable when present
+env_db_url = os.getenv("DATABASE_URL") or os.getenv("SQLALCHEMY_URL")
+if env_db_url:
+    # If the environment provides a DB URL, use it instead of the ini value
+    config.set_main_option("sqlalchemy.url", env_db_url)
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.

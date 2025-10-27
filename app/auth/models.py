@@ -84,6 +84,8 @@ class User(Base):
     flight_bookings = relationship("FlightBooking", back_populates="user")
     hotel_bookings = relationship("HotelBooking", back_populates="user")
     bus_bookings = relationship("BusBooking", back_populates="user")
+    # Refresh tokens relationship
+    refresh_tokens = relationship("RefreshToken", back_populates="user")
     
     def __repr__(self):
         return f"<User(id={self.id}, email={self.email}, role={self.role})>"
@@ -102,3 +104,20 @@ class User(Base):
     def is_approved_agent(self) -> bool:
         """Check if agent is approved and can operate."""
         return self.is_agent and self.approval_status == AgentApprovalStatus.APPROVED
+
+
+class RefreshToken(Base):
+    """
+    Refresh token model to persist issued refresh tokens.
+    """
+    __tablename__ = "refresh_tokens"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, nullable=False)
+    token = Column(String(500), unique=True, nullable=False)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    is_revoked = Column(Boolean, default=False, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # relationship back to user (optional foreign key relationship is handled by migrations)
+    user = relationship("User", back_populates="refresh_tokens")
