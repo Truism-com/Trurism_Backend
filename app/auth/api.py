@@ -171,6 +171,14 @@ async def login_user(
     )
     
     refresh_token = SecurityManager.create_refresh_token(data=token_data)
+    # Persist refresh token in DB
+    try:
+        from app.core.security import SecurityManager as _SM
+        expires_at = _SM.get_token_expiration(refresh_token)
+        await auth_service.create_refresh_token_record(user.id, refresh_token, expires_at)
+    except Exception:
+        # If storing refresh token fails, proceed but log in production (keep login flow resilient)
+        pass
     
     return TokenResponse(
         access_token=access_token,
@@ -212,6 +220,14 @@ async def refresh_access_token(
     # Verify user still exists and is active
     auth_service = AuthService(db)
     user = await auth_service.get_user_by_id(int(user_id))
+    # Verify refresh token persisted and valid
+    stored_rt = await auth_service.verify_refresh_token(refresh_data.refresh_token)
+    if not stored_rt:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token invalid or revoked",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     
     if not user or not user.is_active:
         raise HTTPException(
