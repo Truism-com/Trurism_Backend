@@ -9,7 +9,7 @@ This module defines Pydantic schemas for administrative operations:
 - System configuration schemas
 """
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from typing import Optional, List, Dict, Any
 from datetime import datetime, date
 from enum import Enum
@@ -38,8 +38,7 @@ class UserManagementResponse(BaseModel):
     last_login: Optional[datetime] = Field(None, description="Last login timestamp")
     total_bookings: int = Field(0, description="Total number of bookings made")
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class AgentApprovalRequest(BaseModel):
@@ -86,8 +85,7 @@ class BookingManagementResponse(BaseModel):
     updated_at: Optional[datetime] = Field(None, description="Last update time")
     details: Dict[str, Any] = Field(..., description="Booking-specific details")
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class BookingStatusUpdateRequest(BaseModel):
@@ -167,11 +165,12 @@ class BookingAnalyticsResponse(BaseModel):
     average_booking_value: float = Field(..., ge=0, description="Average booking value")
     data_points: List[Dict[str, Any]] = Field(..., description="Detailed analytics data")
     
-    class Config:
-        json_encoders = {
+    model_config = ConfigDict(
+        json_encoders={
             date: lambda v: v.isoformat(),
             datetime: lambda v: v.isoformat()
         }
+    )
 
 
 class SystemHealthResponse(BaseModel):
@@ -206,8 +205,7 @@ class AdminActionLog(BaseModel):
     timestamp: datetime = Field(..., description="Action timestamp")
     ip_address: Optional[str] = Field(None, description="Admin IP address")
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class PaginatedResponse(BaseModel):

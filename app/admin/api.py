@@ -12,6 +12,7 @@ This module defines FastAPI endpoints for administrative operations:
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
+from datetime import datetime
 
 from app.core.database import get_database_session
 from app.auth.api import get_current_admin_user
@@ -381,8 +382,8 @@ async def get_all_bookings(
 @router.put("/bookings/{booking_id}/status")
 async def update_booking_status(
     booking_id: int,
-    booking_type: str = Query(..., description="Booking type (flight, hotel, bus)"),
     status_request: BookingStatusUpdateRequest,
+    booking_type: str = Query(..., description="Booking type (flight, hotel, bus)"),
     current_admin: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_database_session)
 ):
