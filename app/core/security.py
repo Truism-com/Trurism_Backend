@@ -13,7 +13,7 @@ from typing import Optional, Dict, Any
 from jose import jwt, JWTError
 from passlib.context import CryptContext
 from fastapi import HTTPException, status
-import redis.asyncio as redis
+import redis
 import json
 import hashlib
 
@@ -116,8 +116,9 @@ class SecurityManager:
             HTTPException: If token is invalid or expired
         """
         try:
+            # Use PyJWT to decode token; this will raise PyJWTError on failure
             payload = jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
-            
+
             # Check token type
             if payload.get("type") != token_type:
                 raise HTTPException(
@@ -125,7 +126,7 @@ class SecurityManager:
                     detail=f"Invalid token type. Expected {token_type}",
                     headers={"WWW-Authenticate": "Bearer"},
                 )
-            
+
             # Check if token is blacklisted
             if await SecurityManager.is_token_blacklisted(token):
                 raise HTTPException(
@@ -133,10 +134,10 @@ class SecurityManager:
                     detail="Token has been revoked",
                     headers={"WWW-Authenticate": "Bearer"},
                 )
-            
+
             return payload
-            
-        except JWTError:
+
+        except jwt.PyJWTError:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Could not validate credentials",
@@ -152,12 +153,20 @@ class SecurityManager:
             token (str): Token to blacklist
             expires_at (datetime): When the token would naturally expire
         """
-        # Calculate TTL in seconds
-        ttl = int((expires_at - datetime.utcnow()).total_seconds())
-        if ttl > 0:
-            # Use token hash for privacy and reduced storage
-            token_hash = hashlib.sha256(token.encode()).hexdigest()
-            await redis_client.setex(f"blacklist:{token_hash}", ttl, "true")
+        # Store token in Redis with expiration (ttl in seconds)
+        try:
+            ttl = int((expires_at - datetime.utcnow()).total_seconds())
+            if ttl <= 0:
+                ttl = 1
+        except Exception:
+            ttl = None
+
+        key = f"blacklist:{token}"
+        if ttl:
+            redis_client.setex(key, ttl, "true")
+        else:
+            # fallback: set without expiry
+            redis_client.set(key, "true")
     
     @staticmethod
     async def is_token_blacklisted(token: str) -> bool:
@@ -170,9 +179,11 @@ class SecurityManager:
         Returns:
             bool: True if token is blacklisted, False otherwise
         """
-        token_hash = hashlib.sha256(token.encode()).hexdigest()
-        result = await redis_client.exists(f"blacklist:{token_hash}")
-        return result > 0
+        try:
+            return redis_client.exists(f"blacklist:{token}") > 0
+        except Exception:
+            # If Redis is unavailable, fail open (do not block valid tokens)
+            return False
     
     @staticmethod
     def get_token_expiration(token: str) -> Optional[datetime]:
@@ -190,6 +201,6 @@ class SecurityManager:
             exp_timestamp = payload.get("exp")
             if exp_timestamp:
                 return datetime.fromtimestamp(exp_timestamp)
-        except JWTError:
+        except jwt.PyJWTError:
             pass
         return None
