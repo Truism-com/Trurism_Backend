@@ -40,10 +40,11 @@ async def create_flight_booking(
     
     This endpoint creates a flight booking for the authenticated user.
     It processes payment and confirms the booking if payment is successful.
+    Automatically tracks who created the booking (salesperson/agent tracking).
     
     Args:
         booking_request: Flight booking request data
-        current_user: Current authenticated user
+        current_user: Current authenticated user (who created this booking)
         db: Database session
         
     Returns:
@@ -67,8 +68,9 @@ async def create_flight_booking(
         }
         
         booking_service = FlightBookingService(db)
+        # Track who created this booking (for B2B agent tracking)
         booking = await booking_service.create_flight_booking(
-            current_user, booking_request, flight_data
+            current_user, booking_request, flight_data, created_by_user=current_user
         )
         
         return FlightBookingResponse.from_orm(booking)
@@ -91,10 +93,11 @@ async def create_hotel_booking(
     
     This endpoint creates a hotel booking for the authenticated user.
     It processes payment and confirms the booking if payment is successful.
+    Automatically tracks who created the booking (salesperson/agent tracking).
     
     Args:
         booking_request: Hotel booking request data
-        current_user: Current authenticated user
+        current_user: Current authenticated user (who created this booking)
         db: Database session
         
     Returns:
@@ -115,8 +118,9 @@ async def create_hotel_booking(
         }
         
         booking_service = HotelBookingService(db)
+        # Track who created this booking (for B2B agent tracking)
         booking = await booking_service.create_hotel_booking(
-            current_user, booking_request, hotel_data
+            current_user, booking_request, hotel_data, created_by_user=current_user
         )
         
         return HotelBookingResponse.from_orm(booking)
@@ -139,10 +143,11 @@ async def create_bus_booking(
     
     This endpoint creates a bus booking for the authenticated user.
     It processes payment and confirms the booking if payment is successful.
+    Automatically tracks who created the booking (salesperson/agent tracking).
     
     Args:
         booking_request: Bus booking request data
-        current_user: Current authenticated user
+        current_user: Current authenticated user (who created this booking)
         db: Database session
         
     Returns:
@@ -165,8 +170,9 @@ async def create_bus_booking(
         }
         
         booking_service = BusBookingService(db)
+        # Track who created this booking (for B2B agent tracking)
         booking = await booking_service.create_bus_booking(
-            current_user, booking_request, bus_data
+            current_user, booking_request, bus_data, created_by_user=current_user
         )
         
         return BusBookingResponse.from_orm(booking)

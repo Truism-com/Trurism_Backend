@@ -98,7 +98,8 @@ class FlightBookingService(BookingService):
         self, 
         user: User, 
         booking_request: FlightBookingRequest,
-        flight_data: Dict[str, Any]
+        flight_data: Dict[str, Any],
+        created_by_user: Optional[User] = None
     ) -> FlightBooking:
         """
         Create a new flight booking.
@@ -107,6 +108,7 @@ class FlightBookingService(BookingService):
             user: User making the booking
             booking_request: Flight booking request data
             flight_data: Flight details from search results
+            created_by_user: Optional user who created this booking (for B2B tracking)
             
         Returns:
             FlightBooking: Created flight booking
@@ -127,6 +129,7 @@ class FlightBookingService(BookingService):
             flight_booking = FlightBooking(
                 booking_reference=booking_reference,
                 user_id=user.id,
+                created_by_id=created_by_user.id if created_by_user else user.id,
                 offer_id=booking_request.offer_id,
                 airline=flight_data.get('airline', ''),
                 flight_number=flight_data.get('flight_number', ''),
@@ -278,24 +281,6 @@ class FlightBookingService(BookingService):
         await self.db.refresh(booking)
         
         return booking
-    
-    async def get_user_flight_bookings(
-        self, 
-        user_id: int, 
-        skip: int = 0, 
-        limit: int = 10,
-        status_filter: Optional[BookingStatus] = None
-    ) -> List[FlightBooking]:
-        """Get user's flight bookings with pagination and filtering."""
-        query = select(FlightBooking).where(FlightBooking.user_id == user_id)
-        
-        if status_filter:
-            query = query.where(FlightBooking.status == status_filter)
-        
-        query = query.order_by(FlightBooking.created_at.desc()).offset(skip).limit(limit)
-        
-        result = await self.db.execute(query)
-        return result.scalars().all()
 
 
 class HotelBookingService(BookingService):

@@ -6,6 +6,7 @@ It sets up the database connection, imports all models, and configures migration
 """
 
 import asyncio
+import os
 from logging.config import fileConfig
 import os
 from sqlalchemy import pool

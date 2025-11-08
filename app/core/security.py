@@ -10,18 +10,19 @@ This module provides security-related functionality including:
 
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
-import jwt
+from jose import jwt, JWTError
 from passlib.context import CryptContext
 from fastapi import HTTPException, status
 import redis
 import json
+import hashlib
 
 from app.core.config import settings
 
 # Password hashing context
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-# Redis client for token blacklisting
+# Async Redis client for token blacklisting
 redis_client = redis.from_url(settings.redis_url, decode_responses=True)
 
 
@@ -100,7 +101,7 @@ class SecurityManager:
         return encoded_jwt
     
     @staticmethod
-    def verify_token(token: str, token_type: str = "access") -> Dict[str, Any]:
+    async def verify_token(token: str, token_type: str = "access") -> Dict[str, Any]:
         """
         Verify and decode a JWT token.
         
@@ -127,7 +128,7 @@ class SecurityManager:
                 )
 
             # Check if token is blacklisted
-            if SecurityManager.is_token_blacklisted(token):
+            if await SecurityManager.is_token_blacklisted(token):
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     detail="Token has been revoked",
@@ -144,7 +145,7 @@ class SecurityManager:
             )
     
     @staticmethod
-    def blacklist_token(token: str, expires_at: datetime) -> None:
+    async def blacklist_token(token: str, expires_at: datetime) -> None:
         """
         Add a token to the blacklist.
         
@@ -168,7 +169,7 @@ class SecurityManager:
             redis_client.set(key, "true")
     
     @staticmethod
-    def is_token_blacklisted(token: str) -> bool:
+    async def is_token_blacklisted(token: str) -> bool:
         """
         Check if a token is blacklisted.
         
