@@ -9,7 +9,7 @@ This module defines Pydantic schemas for booking operations:
 - Booking status and cancellation schemas
 """
 
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator, ConfigDict
 from typing import Optional, List, Dict, Any
 from datetime import datetime, date
 from enum import Enum
@@ -32,15 +32,17 @@ class PassengerSchema(BaseModel):
     phone: Optional[str] = Field(None, min_length=10, max_length=20, description="Contact phone number")
     email: Optional[str] = Field(None, description="Contact email address")
     
-    @validator('name')
-    def validate_name(cls, v):
+    @field_validator('name')
+    @classmethod
+    def validate_name(cls, v: str) -> str:
         """Validate passenger name format."""
         if not v.replace(' ', '').replace('-', '').isalpha():
             raise ValueError('Name should contain only letters, spaces, and hyphens')
         return v.title()
     
-    @validator('phone')
-    def validate_phone(cls, v):
+    @field_validator('phone')
+    @classmethod
+    def validate_phone(cls, v: Optional[str]) -> Optional[str]:
         """Validate phone number format."""
         if v and not v.replace('+', '').replace('-', '').replace(' ', '').isdigit():
             raise ValueError('Invalid phone number format')
@@ -62,20 +64,22 @@ class PaymentDetailsSchema(BaseModel):
     bank_name: Optional[str] = Field(None, description="Bank name for net banking")
     wallet_type: Optional[str] = Field(None, description="Wallet type for wallet payments")
     
-    @validator('card_number')
-    def validate_card_number(cls, v, values):
+    @field_validator('card_number')
+    @classmethod
+    def validate_card_number(cls, v: Optional[str], info) -> Optional[str]:
         """Validate card number format."""
-        method = values.get('method')
+        method = info.data.get('method')
         if method == PaymentMethod.CARD and not v:
             raise ValueError('Card number is required for card payments')
         if v and not v.replace(' ', '').replace('-', '').isdigit():
             raise ValueError('Invalid card number format')
         return v
     
-    @validator('upi_id')
-    def validate_upi_id(cls, v, values):
+    @field_validator('upi_id')
+    @classmethod
+    def validate_upi_id(cls, v: Optional[str], info) -> Optional[str]:
         """Validate UPI ID format."""
-        method = values.get('method')
+        method = info.data.get('method')
         if method == PaymentMethod.UPI and not v:
             raise ValueError('UPI ID is required for UPI payments')
         if v and '@' not in v:
@@ -97,8 +101,9 @@ class FlightBookingRequest(BaseModel):
     contact_email: str = Field(..., description="Contact email for booking confirmation")
     contact_phone: str = Field(..., min_length=10, max_length=20, description="Contact phone number")
     
-    @validator('passengers')
-    def validate_passengers(cls, v):
+    @field_validator('passengers')
+    @classmethod
+    def validate_passengers(cls, v: List[PassengerSchema]) -> List[PassengerSchema]:
         """Validate passenger count and types."""
         if len(v) > 9:
             raise ValueError('Maximum 9 passengers allowed per booking')
@@ -133,17 +138,20 @@ class HotelBookingRequest(BaseModel):
     contact_email: str = Field(..., description="Contact email for booking confirmation")
     contact_phone: str = Field(..., min_length=10, max_length=20, description="Contact phone number")
     
-    @validator('checkout_date')
-    def validate_checkout_date(cls, v, values):
+    @field_validator('checkout_date')
+    @classmethod
+    def validate_checkout_date(cls, v: date, info) -> date:
         """Validate checkout date is after checkin date."""
-        if 'checkin_date' in values and v <= values['checkin_date']:
+        checkin_date = info.data.get('checkin_date')
+        if checkin_date and v <= checkin_date:
             raise ValueError('Checkout date must be after checkin date')
         return v
     
-    @validator('guest_details')
-    def validate_guest_details(cls, v, values):
+    @field_validator('guest_details')
+    @classmethod
+    def validate_guest_details(cls, v: List[Dict[str, Any]], info) -> List[Dict[str, Any]]:
         """Validate guest details match room count."""
-        rooms = values.get('rooms', 0)
+        rooms = info.data.get('rooms', 0)
         if len(v) != rooms:
             raise ValueError('Guest details must be provided for each room')
         return v
@@ -167,10 +175,11 @@ class BusBookingRequest(BaseModel):
     contact_email: str = Field(..., description="Contact email for booking confirmation")
     contact_phone: str = Field(..., min_length=10, max_length=20, description="Contact phone number")
     
-    @validator('passenger_details')
-    def validate_passenger_details(cls, v, values):
+    @field_validator('passenger_details')
+    @classmethod
+    def validate_passenger_details(cls, v: List[PassengerSchema], info) -> List[PassengerSchema]:
         """Validate passenger details match passenger count."""
-        passengers = values.get('passengers', 0)
+        passengers = info.data.get('passengers', 0)
         if len(v) != passengers:
             raise ValueError('Passenger details must match passenger count')
         return v
@@ -193,8 +202,7 @@ class BookingResponse(BaseModel):
     expires_at: Optional[datetime] = Field(None, description="Booking expiry time")
     created_at: datetime = Field(..., description="Booking creation time")
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class FlightBookingResponse(BookingResponse):

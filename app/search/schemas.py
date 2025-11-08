@@ -8,7 +8,7 @@ This module defines Pydantic schemas for search operations:
 - Search cache management schemas
 """
 
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator, ConfigDict
 from typing import Optional, List
 from datetime import date, datetime
 from enum import Enum
@@ -46,22 +46,26 @@ class FlightSearchRequest(BaseModel):
     travel_class: TravelClass = Field(TravelClass.ECONOMY, description="Travel class")
     max_results: Optional[int] = Field(50, ge=1, le=100, description="Maximum search results")
     
-    @validator('return_date')
-    def validate_return_date(cls, v, values):
+    @field_validator('return_date')
+    @classmethod
+    def validate_return_date(cls, v: Optional[date], info) -> Optional[date]:
         """Validate return date is after departure date."""
-        if v and 'depart_date' in values and v <= values['depart_date']:
+        depart_date = info.data.get('depart_date')
+        if v and depart_date and v <= depart_date:
             raise ValueError('Return date must be after departure date')
         return v
     
-    @validator('origin', 'destination')
-    def validate_airport_codes(cls, v):
+    @field_validator('origin', 'destination')
+    @classmethod
+    def validate_airport_codes(cls, v: str) -> str:
         """Validate airport codes are uppercase."""
         return v.upper()
     
-    @validator('infants')
-    def validate_infants(cls, v, values):
+    @field_validator('infants')
+    @classmethod
+    def validate_infants(cls, v: int, info) -> int:
         """Validate infant count doesn't exceed adult count."""
-        adults = values.get('adults', 0)
+        adults = info.data.get('adults', 0)
         if v > adults:
             raise ValueError('Number of infants cannot exceed number of adults')
         return v
@@ -86,17 +90,20 @@ class HotelSearchRequest(BaseModel):
     amenities: Optional[List[str]] = Field(None, description="Required amenities")
     max_results: Optional[int] = Field(50, ge=1, le=100, description="Maximum search results")
     
-    @validator('checkout')
-    def validate_checkout(cls, v, values):
+    @field_validator('checkout')
+    @classmethod
+    def validate_checkout(cls, v: date, info) -> date:
         """Validate checkout date is after checkin date."""
-        if 'checkin' in values and v <= values['checkin']:
+        checkin = info.data.get('checkin')
+        if checkin and v <= checkin:
             raise ValueError('Checkout date must be after checkin date')
         return v
     
-    @validator('max_price')
-    def validate_price_range(cls, v, values):
+    @field_validator('max_price')
+    @classmethod
+    def validate_price_range(cls, v: Optional[float], info) -> Optional[float]:
         """Validate max price is greater than min price."""
-        min_price = values.get('min_price')
+        min_price = info.data.get('min_price')
         if min_price and v and v <= min_price:
             raise ValueError('Maximum price must be greater than minimum price')
         return v
@@ -116,10 +123,12 @@ class BusSearchRequest(BaseModel):
     return_date: Optional[date] = Field(None, description="Return date for round trip")
     max_results: Optional[int] = Field(50, ge=1, le=100, description="Maximum search results")
     
-    @validator('return_date')
-    def validate_return_date(cls, v, values):
+    @field_validator('return_date')
+    @classmethod
+    def validate_return_date(cls, v: Optional[date], info) -> Optional[date]:
         """Validate return date is after travel date."""
-        if v and 'travel_date' in values and v <= values['travel_date']:
+        travel_date = info.data.get('travel_date')
+        if v and travel_date and v <= travel_date:
             raise ValueError('Return date must be after travel date')
         return v
 
@@ -147,10 +156,9 @@ class FlightResult(BaseModel):
     baggage_allowance: Optional[str] = Field(None, description="Baggage allowance")
     refundable: bool = Field(False, description="Whether booking is refundable")
     
-    class Config:
-        json_encoders = {
-            datetime: lambda v: v.isoformat()
-        }
+    model_config = ConfigDict(
+        json_encoders={datetime: lambda v: v.isoformat()}
+    )
 
 
 class HotelResult(BaseModel):
@@ -197,10 +205,9 @@ class BusResult(BaseModel):
     boarding_points: List[str] = Field([], description="Available boarding points")
     dropping_points: List[str] = Field([], description="Available dropping points")
     
-    class Config:
-        json_encoders = {
-            datetime: lambda v: v.isoformat()
-        }
+    model_config = ConfigDict(
+        json_encoders={datetime: lambda v: v.isoformat()}
+    )
 
 
 class SearchResponse(BaseModel):

@@ -312,9 +312,31 @@ app.include_router(booking_router)
 app.include_router(admin_router)
 app.include_router(api_keys_router)
 
-# Add router information to OpenAPI
+# Initialize openapi_tags if not exists
+if app.openapi_tags is None:
+    app.openapi_tags = []
+
+# Add router information to OpenAPI with proper tag format
+tag_descriptions = {
+    "Authentication": "User registration, login, and JWT-based authentication",
+    "Search": "Search for flights, hotels, and buses",
+    "Bookings": "Manage flight, hotel, and bus bookings",
+    "Admin": "Administrative operations and system management",
+    "API Keys": "API key management for third-party integrations",
+    "Health": "Health check endpoints for monitoring",
+    "Root": "API root information"
+}
+
+existing_tags = set()
 for router in [auth_router, search_router, booking_router, admin_router, api_keys_router]:
-    app.openapi_tags.extend(router.tags)
+    if hasattr(router, 'tags') and router.tags:
+        for tag in router.tags:
+            if isinstance(tag, str) and tag not in existing_tags:
+                app.openapi_tags.append({
+                    "name": tag,
+                    "description": tag_descriptions.get(tag, f"{tag} endpoints")
+                })
+                existing_tags.add(tag)
 
 
 if __name__ == "__main__":
