@@ -8,7 +8,7 @@ This module defines Pydantic schemas for request/response validation:
 - Password reset schemas
 """
 
-from pydantic import BaseModel, EmailStr, validator
+from pydantic import BaseModel, EmailStr, field_validator, ConfigDict
 from typing import Optional
 from datetime import datetime
 from enum import Enum
@@ -32,8 +32,9 @@ class UserRegisterRequest(BaseModel):
     company_name: Optional[str] = None  # Required for agents
     pan_number: Optional[str] = None    # Required for agents
     
-    @validator('password')
-    def validate_password(cls, v):
+    @field_validator('password')
+    @classmethod
+    def validate_password(cls, v: str) -> str:
         """Validate password strength."""
         if len(v) < 8:
             raise ValueError('Password must be at least 8 characters long')
@@ -45,18 +46,20 @@ class UserRegisterRequest(BaseModel):
             raise ValueError('Password must contain at least one digit')
         return v
     
-    @validator('company_name')
-    def validate_company_name(cls, v, values):
+    @field_validator('company_name')
+    @classmethod
+    def validate_company_name(cls, v: Optional[str], info) -> Optional[str]:
         """Validate company name is provided for agents."""
-        role = values.get('role')
+        role = info.data.get('role')
         if role == UserRole.AGENT and not v:
             raise ValueError('Company name is required for agents')
         return v
     
-    @validator('pan_number')
-    def validate_pan_number(cls, v, values):
+    @field_validator('pan_number')
+    @classmethod
+    def validate_pan_number(cls, v: Optional[str], info) -> Optional[str]:
         """Validate PAN number is provided for agents."""
-        role = values.get('role')
+        role = info.data.get('role')
         if role == UserRole.AGENT and not v:
             raise ValueError('PAN number is required for agents')
         if v and len(v) != 10:
@@ -129,8 +132,9 @@ class UserProfileUpdate(BaseModel):
     phone: Optional[str] = None
     address: Optional[str] = None
     
-    @validator('phone')
-    def validate_phone(cls, v):
+    @field_validator('phone')
+    @classmethod
+    def validate_phone(cls, v: Optional[str]) -> Optional[str]:
         """Validate phone number format."""
         if v and not v.replace('+', '').replace('-', '').replace(' ', '').isdigit():
             raise ValueError('Invalid phone number format')
@@ -146,8 +150,9 @@ class PasswordChangeRequest(BaseModel):
     current_password: str
     new_password: str
     
-    @validator('new_password')
-    def validate_new_password(cls, v):
+    @field_validator('new_password')
+    @classmethod
+    def validate_new_password(cls, v: str) -> str:
         """Validate new password strength."""
         if len(v) < 8:
             raise ValueError('Password must be at least 8 characters long')

@@ -10,7 +10,8 @@ This module handles all application configuration including:
 """
 
 from typing import Optional
-from pydantic import BaseSettings, validator
+from pydantic import field_validator
+from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
@@ -50,11 +51,21 @@ class Settings(BaseSettings):
     bcrypt_rounds: int = 12
     rate_limit_per_minute: int = 60
     
-    # External API Settings
+    # External API Settings - XML.Agency
     xml_agency_base_url: str = "https://api.xmlagency.com"
     xml_agency_username: str = ""
     xml_agency_password: str = ""
-    api_timeout_seconds: int = 30
+    xml_agency_timeout: int = 30
+    
+    # Payment Gateway Settings - Razorpay
+    razorpay_key_id: str = ""
+    razorpay_key_secret: str = ""
+    
+    # Email Settings
+    mail_server: str = "smtp.gmail.com"
+    mail_port: int = 587
+    mail_from: str = ""
+    mail_password: str = ""
     
     # Cache Settings
     search_cache_ttl: int = 900  # 15 minutes
@@ -64,28 +75,32 @@ class Settings(BaseSettings):
     max_file_size: int = 10 * 1024 * 1024  # 10MB
     allowed_file_types: list = [".jpg", ".jpeg", ".png", ".pdf"]
     
-    @validator("environment")
-    def validate_environment(cls, v):
+    @field_validator("environment")
+    @classmethod
+    def validate_environment(cls, v: str) -> str:
         """Validate that environment is one of the allowed values."""
         allowed_envs = ["development", "staging", "production"]
         if v not in allowed_envs:
             raise ValueError(f"Environment must be one of {allowed_envs}")
         return v
 
-    @validator("jwt_secret_key")
-    def validate_jwt_secret(cls, v, values):
+    @field_validator("jwt_secret_key")
+    @classmethod
+    def validate_jwt_secret(cls, v: str, info) -> str:
         """Ensure a JWT secret is provided in non-development environments.
 
         This avoids accidental use of hard-coded secrets in production.
         """
-        env = values.get("environment") or "development"
+        # Access other fields through info.data
+        env = info.data.get("environment", "development")
         if env == "production" and (not v or v.strip() == ""):
             raise ValueError("JWT_SECRET_KEY must be set in production environment")
         return v
     
-    class Config:
-        env_file = ".env"
-        case_sensitive = False
+    model_config = {
+        "env_file": ".env",
+        "case_sensitive": False
+    }
 
 
 # Global settings instance

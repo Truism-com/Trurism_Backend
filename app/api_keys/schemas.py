@@ -7,7 +7,7 @@ This module defines request/response schemas for API key management:
 - Scope management
 """
 
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator, ConfigDict
 from typing import Optional, List
 from datetime import datetime
 
@@ -28,8 +28,9 @@ class APIKeyCreate(BaseModel):
     expires_in_days: Optional[int] = Field(None, ge=1, le=3650, description="Expiration in days")
     environment: Optional[str] = Field("production", description="Environment (production, staging, development)")
     
-    @validator('environment')
-    def validate_environment(cls, v):
+    @field_validator('environment')
+    @classmethod
+    def validate_environment(cls, v: str) -> str:
         """Validate environment value."""
         allowed = ["production", "staging", "development"]
         if v not in allowed:
@@ -57,8 +58,7 @@ class APIKeyResponse(BaseModel):
     last_used_at: Optional[datetime] = Field(None, description="Last usage timestamp")
     usage_count: int = Field(..., description="Total usage count")
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class APIKeyListResponse(BaseModel):
@@ -79,8 +79,7 @@ class APIKeyListResponse(BaseModel):
     last_used_at: Optional[datetime]
     usage_count: int
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class APIKeyUpdate(BaseModel):
