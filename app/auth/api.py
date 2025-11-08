@@ -53,7 +53,7 @@ async def get_current_user(
         HTTPException: If token is invalid or user not found
     """
     token = credentials.credentials
-    payload = SecurityManager.verify_token(token, "access")
+    payload = await SecurityManager.verify_token(token, "access")
     
     user_id = payload.get("sub")
     if not user_id:
@@ -199,7 +199,7 @@ async def refresh_access_token(
     Raises:
         HTTPException: If refresh token is invalid
     """
-    payload = SecurityManager.verify_token(refresh_data.refresh_token, "refresh")
+    payload = await SecurityManager.verify_token(refresh_data.refresh_token, "refresh")
     
     user_id = payload.get("sub")
     if not user_id:
@@ -258,7 +258,7 @@ async def logout_user(
     if exp_timestamp:
         from datetime import datetime
         expires_at = datetime.fromtimestamp(exp_timestamp)
-        SecurityManager.blacklist_token(token, expires_at)
+        await SecurityManager.blacklist_token(token, expires_at)
     
     return {"message": "Successfully logged out"}
 

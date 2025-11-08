@@ -123,7 +123,11 @@ class FlightBooking(Base):
     
     # User relationship
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    user = relationship("User", back_populates="flight_bookings")
+    user = relationship("User", back_populates="flight_bookings", foreign_keys=[user_id])
+    
+    # Salesperson/Agent tracking (who created this booking)
+    created_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_by = relationship("User", foreign_keys=[created_by_id])
     
     # Flight details
     offer_id = Column(String(50), nullable=False)  # From search results
@@ -180,7 +184,11 @@ class HotelBooking(Base):
     
     # User relationship
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    user = relationship("User", back_populates="hotel_bookings")
+    user = relationship("User", back_populates="hotel_bookings", foreign_keys=[user_id])
+    
+    # Salesperson/Agent tracking (who created this booking)
+    created_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_by = relationship("User", foreign_keys=[created_by_id])
     
     # Hotel details
     hotel_id = Column(String(50), nullable=False)  # From search results
@@ -237,7 +245,11 @@ class BusBooking(Base):
     
     # User relationship
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    user = relationship("User", back_populates="bus_bookings")
+    user = relationship("User", back_populates="bus_bookings", foreign_keys=[user_id])
+    
+    # Salesperson/Agent tracking (who created this booking)
+    created_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_by = relationship("User", foreign_keys=[created_by_id])
     
     # Bus details
     bus_id = Column(String(50), nullable=False)  # From search results

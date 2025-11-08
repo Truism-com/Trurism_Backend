@@ -1,0 +1,40 @@
+# Render manifest for Travel Booking Platform
+# See https://render.com/docs/deploying-with-manifest for details
+
+services:
+  - type: web
+    name: travel-booking-api
+    plan: free
+    dockerfilePath: Dockerfile
+    runtime: python
+    # startCommand is taken from Dockerfile CMD when using docker env
+
+  - type: worker
+    name: travel-booking-worker
+    plan: free
+    dockerfilePath: Dockerfile
+    # Optional — enable if you have Celery configured and app.celery exists
+    startCommand: "celery -A app.celery worker --loglevel=info"
+databases:
+  - name: travel-booking-db
+    plan: starter
+    # region: choose your nearest region (e.g., oregon, frankfurt, singapore)
+
+services_env:
+  - service: travel-booking-api
+    env_vars:
+      - key: DATABASE_URL
+      - key: REDIS_URL
+      - key: JWT_SECRET_KEY
+      - key: DEBUG
+
+  - service: travel-booking-worker
+    env_vars:
+      - key: DATABASE_URL
+      - key: REDIS_URL
+      - key: CELERY_BROKER_URL
+      - key: CELERY_RESULT_BACKEND
+
+# Optionally provision a managed Redis instance via Render's dashboard
+# Render doesn't support managed Redis via manifest at the time of writing
+# so create a Redis instance in the Render dashboard and copy REDIS_URL to env

@@ -37,10 +37,14 @@ class Settings(BaseSettings):
     redis_db: int = 0
     
     # JWT Settings
-    jwt_secret_key: str = "your-secret-key-change-in-production"
+    jwt_secret_key: str = ""
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 15
     refresh_token_expire_days: int = 7
+
+    # Celery / Background worker settings
+    celery_broker_url: str = ""
+    celery_result_backend: str = ""
     
     # Security Settings
     bcrypt_rounds: int = 12
@@ -66,6 +70,17 @@ class Settings(BaseSettings):
         allowed_envs = ["development", "staging", "production"]
         if v not in allowed_envs:
             raise ValueError(f"Environment must be one of {allowed_envs}")
+        return v
+
+    @validator("jwt_secret_key")
+    def validate_jwt_secret(cls, v, values):
+        """Ensure a JWT secret is provided in non-development environments.
+
+        This avoids accidental use of hard-coded secrets in production.
+        """
+        env = values.get("environment") or "development"
+        if env == "production" and (not v or v.strip() == ""):
+            raise ValueError("JWT_SECRET_KEY must be set in production environment")
         return v
     
     class Config:
