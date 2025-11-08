@@ -96,6 +96,7 @@ async def init_database():
         # Import all models to ensure they are registered
         from app.auth.models import User
         from app.booking.models import FlightBooking, HotelBooking, BusBooking
+        from app.api_keys.models import APIKey
         
         # Create all tables
         await conn.run_sync(Base.metadata.create_all)

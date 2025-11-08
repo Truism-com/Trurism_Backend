@@ -27,6 +27,9 @@ from app.auth.api import router as auth_router
 from app.search.api import router as search_router
 from app.booking.api import router as booking_router
 from app.admin.api import router as admin_router
+from app.api_keys.api import router as api_keys_router
+import os
+import redis.asyncio as redis_async
 
 # Configure logging
 logging.basicConfig(
@@ -61,6 +64,17 @@ async def lifespan(app: FastAPI):
             raise Exception("Database connection failed")
         
         logger.info("Database health check passed")
+        # Check Redis (if configured)
+        try:
+            if settings.redis_url:
+                # use a short-lived client to ping Redis
+                client = redis_async.from_url(settings.redis_url, encoding="utf-8", decode_responses=True)
+                pong = await client.ping()
+                if pong:
+                    logger.info("Redis ping successful")
+                await client.close()
+        except Exception as re:
+            logger.warning(f"Redis health check failed: {re}")
         
         # TODO: Initialize Redis connection
         # TODO: Initialize external API clients
@@ -77,7 +91,7 @@ async def lifespan(app: FastAPI):
     # Shutdown
     logger.info("Shutting down Travel Booking Platform API...")
     # TODO: Close database connections
-    # TODO: Close Redis connections
+    # Close redis connections if any (module-level clients will handle their own cleanup)
     # TODO: Stop background tasks
     logger.info("Travel Booking Platform API shutdown complete")
 
@@ -296,9 +310,10 @@ app.include_router(auth_router)
 app.include_router(search_router)
 app.include_router(booking_router)
 app.include_router(admin_router)
+app.include_router(api_keys_router)
 
 # Add router information to OpenAPI
-for router in [auth_router, search_router, booking_router, admin_router]:
+for router in [auth_router, search_router, booking_router, admin_router, api_keys_router]:
     app.openapi_tags.extend(router.tags)
 
 

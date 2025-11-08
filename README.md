@@ -203,6 +203,38 @@ GET  /admin/bookings         # List all bookings
 PUT  /admin/bookings/{id}/status  # Update booking status
 ```
 
+## 🚢 Deploying to Render
+
+This project can be deployed to Render using Docker. A `Dockerfile` and a `render.yaml` manifest are included to help you get started.
+
+Quick steps:
+
+1. Push this repository to a Git provider (GitHub/GitLab).
+2. Sign in to Render and create a new service by connecting your repository. Render will read `render.yaml` if you use the "Use a render.yaml" option.
+3. Ensure the service environment has these environment variables set (use Render's Dashboard -> Environment):
+
+	- DATABASE_URL (e.g. postgresql+asyncpg://user:pass@host:5432/travel_booking_prod?sslmode=require)
+	- REDIS_URL (e.g. redis://:<password>@<host>:6379)
+	- JWT_SECRET_KEY (strong secret)
+	- DEBUG=false
+	- CELERY_BROKER_URL (if you run Celery)
+	- CELERY_RESULT_BACKEND (if you run Celery)
+
+4. Provision a managed Postgres database in Render (or provide an external one) and set `DATABASE_URL` accordingly. Provision Redis separately and set `REDIS_URL`.
+5. On the Render instance (or via a deployment shell), run database migrations:
+
+```bash
+alembic upgrade head
+```
+
+6. The web service runs Uvicorn inside the Docker container and listens on the `$PORT` provided by Render.
+
+Notes:
+- The included `Dockerfile` installs system libraries required by `lxml` and `asyncpg`. If you add packages that require additional system libraries, update the Dockerfile.
+- An optional worker service is included in `render.yaml` for Celery; enable it after you configure Celery (the repo expects `app.celery` to exist for Celery configuration).
+- Use Render's encrypted environment variables to keep secrets safe.
+
+
 ## 🧪 Testing
 
 Run the test suite:

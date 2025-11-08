@@ -11,7 +11,7 @@ This module contains business logic for search operations:
 
 import asyncio
 import json
-import redis
+import redis.asyncio as redis
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta
 import uuid
@@ -25,8 +25,8 @@ from app.search.schemas import (
 )
 from app.core.config import settings
 
-# Redis client for search result caching
-redis_client = redis.from_url(settings.redis_url, decode_responses=True)
+# Redis client for search result caching (async)
+redis_client = redis.from_url(settings.redis_url, encoding="utf-8", decode_responses=True)
 
 
 class SearchService:
@@ -54,7 +54,7 @@ class SearchService:
     async def _get_cached_results(self, cache_key: str) -> Optional[Dict[str, Any]]:
         """Get cached search results."""
         try:
-            cached_data = self.redis.get(cache_key)
+            cached_data = await self.redis.get(cache_key)
             if cached_data:
                 return json.loads(cached_data)
         except Exception as e:
@@ -65,7 +65,8 @@ class SearchService:
         """Cache search results with TTL."""
         try:
             results["cached_at"] = datetime.utcnow().isoformat()
-            self.redis.setex(cache_key, ttl, json.dumps(results))
+            # use setex for TTL
+            await self.redis.setex(cache_key, ttl, json.dumps(results))
         except Exception as e:
             print(f"Cache write error: {e}")
     
