@@ -10,7 +10,7 @@ This module handles all application configuration including:
 """
 
 from typing import Optional
-from pydantic import field_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings
 
 
@@ -28,10 +28,31 @@ class Settings(BaseSettings):
     debug: bool = False
     environment: str = "development"
     
+    # CORS and Security Settings
+    cors_origins: list = ["*"]  # Comma-separated list or "*" for all
+    trusted_hosts: list = ["*"]  # Comma-separated list or "*" for all
+    
     # Database Settings
     database_url: str = "postgresql+asyncpg://user:password@localhost:5432/travel_booking"
     database_pool_size: int = 10
     database_max_overflow: int = 20
+    
+    @model_validator(mode="after")
+    def post_init_processing(self):
+        """Process configuration after initialization."""
+        # Convert Render's postgresql:// URL to postgresql+asyncpg:// for asyncpg
+        if self.database_url.startswith("postgresql://") and not self.database_url.startswith("postgresql+asyncpg://"):
+            self.database_url = self.database_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+        
+        # Parse CORS origins if provided as comma-separated string
+        if isinstance(self.cors_origins, str):
+            self.cors_origins = [origin.strip() for origin in self.cors_origins.split(",")] if self.cors_origins != "*" else ["*"]
+        
+        # Parse trusted hosts if provided as comma-separated string
+        if isinstance(self.trusted_hosts, str):
+            self.trusted_hosts = [host.strip() for host in self.trusted_hosts.split(",")] if self.trusted_hosts != "*" else ["*"]
+        
+        return self
     
     # Redis Settings
     redis_url: str = "redis://localhost:6379"
@@ -44,8 +65,8 @@ class Settings(BaseSettings):
     refresh_token_expire_days: int = 7
 
     # Celery / Background worker settings
-    celery_broker_url: str = ""
-    celery_result_backend: str = ""
+    celery_broker_url: str = "redis://localhost:6379/1"
+    celery_result_backend: str = "redis://localhost:6379/2"
     
     # Security Settings
     bcrypt_rounds: int = 12
