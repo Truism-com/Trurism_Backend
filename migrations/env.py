@@ -34,10 +34,11 @@ if env_db_url:
     if env_db_url.startswith("postgresql://") and not env_db_url.startswith("postgresql+asyncpg://"):
         env_db_url = env_db_url.replace("postgresql://", "postgresql+asyncpg://", 1)
     # Add SSL requirements for Render PostgreSQL if not already present
-    if "postgresql+asyncpg://" in env_db_url and "ssl=" not in env_db_url and "sslmode=" not in env_db_url:
+    # Note: asyncpg only supports 'ssl' parameter, not 'sslmode'
+    if "postgresql+asyncpg://" in env_db_url and "ssl=" not in env_db_url:
         separator = "&" if "?" in env_db_url else "?"
-        # For asyncpg, use both ssl=require and sslmode=require for compatibility
-        env_db_url = f"{env_db_url}{separator}ssl=require&sslmode=require"
+        # For asyncpg, use ssl=require for SSL connections
+        env_db_url = f"{env_db_url}{separator}ssl=require"
     config.set_main_option("sqlalchemy.url", env_db_url)
 else:
     # Fall back to settings which has the conversion logic

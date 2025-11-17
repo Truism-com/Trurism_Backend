@@ -21,7 +21,7 @@ from app.core.config import settings
 # The URL already includes ssl=require if needed, but we also set it in connect_args
 # for explicit SSL configuration with asyncpg
 connect_args = {}
-if "ssl=require" in settings.database_url or "sslmode=require" in settings.database_url:
+if "ssl=require" in settings.database_url:
     # For asyncpg, use ssl='require' for SSL connections
     # asyncpg accepts ssl as a string ('require', 'allow', 'prefer', etc.) or boolean
     connect_args["ssl"] = "require"
