@@ -44,14 +44,20 @@ class Settings(BaseSettings):
         if self.database_url.startswith("postgresql://") and not self.database_url.startswith("postgresql+asyncpg://"):
             self.database_url = self.database_url.replace("postgresql://", "postgresql+asyncpg://", 1)
         
-        # Add SSL requirements for Render PostgreSQL if not already present
-        # Render managed PostgreSQL requires SSL connections
+        # Add SSL requirements only for remote/production databases (e.g., Render PostgreSQL)
+        # Local databases typically don't require SSL
         # Note: asyncpg only supports 'ssl' parameter, not 'sslmode'
         if "postgresql+asyncpg://" in self.database_url and "ssl=" not in self.database_url:
-            # Check if URL already has query parameters
-            separator = "&" if "?" in self.database_url else "?"
-            # For asyncpg, use ssl=require for SSL connections
-            self.database_url = f"{self.database_url}{separator}ssl=require"
+            # Check if this is a remote database that requires SSL
+            is_local = "localhost" in self.database_url or "127.0.0.1" in self.database_url
+            is_production = self.environment in ["production", "staging"]
+            is_remote_host = any(host in self.database_url for host in ["render.com", ".onrender.com", ".amazonaws.com", "cloud", "managed"])
+            
+            # Only add SSL for remote/production databases, not local development
+            if (is_production or is_remote_host) and not is_local:
+                separator = "&" if "?" in self.database_url else "?"
+                # For asyncpg, use ssl=require for SSL connections
+                self.database_url = f"{self.database_url}{separator}ssl=require"
         
         # Parse CORS origins if provided as comma-separated string
         if isinstance(self.cors_origins, str):

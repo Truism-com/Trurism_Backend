@@ -33,12 +33,20 @@ if env_db_url:
     # Convert postgresql:// to postgresql+asyncpg:// if needed (Render compatibility)
     if env_db_url.startswith("postgresql://") and not env_db_url.startswith("postgresql+asyncpg://"):
         env_db_url = env_db_url.replace("postgresql://", "postgresql+asyncpg://", 1)
-    # Add SSL requirements for Render PostgreSQL if not already present
+    # Add SSL requirements only for remote/production databases (e.g., Render PostgreSQL)
+    # Local databases typically don't require SSL
     # Note: asyncpg only supports 'ssl' parameter, not 'sslmode'
     if "postgresql+asyncpg://" in env_db_url and "ssl=" not in env_db_url:
-        separator = "&" if "?" in env_db_url else "?"
-        # For asyncpg, use ssl=require for SSL connections
-        env_db_url = f"{env_db_url}{separator}ssl=require"
+        # Check if this is a remote database that requires SSL
+        is_local = "localhost" in env_db_url or "127.0.0.1" in env_db_url
+        is_production = settings.environment in ["production", "staging"]
+        is_remote_host = any(host in env_db_url for host in ["render.com", ".onrender.com", ".amazonaws.com", "cloud", "managed"])
+        
+        # Only add SSL for remote/production databases, not local development
+        if (is_production or is_remote_host) and not is_local:
+            separator = "&" if "?" in env_db_url else "?"
+            # For asyncpg, use ssl=require for SSL connections
+            env_db_url = f"{env_db_url}{separator}ssl=require"
     config.set_main_option("sqlalchemy.url", env_db_url)
 else:
     # Fall back to settings which has the conversion logic
