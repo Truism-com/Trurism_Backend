@@ -8,7 +8,6 @@ It sets up the database connection, imports all models, and configures migration
 import asyncio
 import os
 from logging.config import fileConfig
-import os
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
@@ -27,10 +26,22 @@ from app.booking.models import (
 config = context.config
 
 # Prefer DATABASE_URL or SQLALCHEMY_URL environment variable when present
+# Use settings.database_url to ensure asyncpg conversion is applied as fallback
+from app.core.config import settings
 env_db_url = os.getenv("DATABASE_URL") or os.getenv("SQLALCHEMY_URL")
 if env_db_url:
-    # If the environment provides a DB URL, use it instead of the ini value
+    # Convert postgresql:// to postgresql+asyncpg:// if needed (Render compatibility)
+    if env_db_url.startswith("postgresql://") and not env_db_url.startswith("postgresql+asyncpg://"):
+        env_db_url = env_db_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+    # Add SSL requirements for Render PostgreSQL if not already present
+    if "postgresql+asyncpg://" in env_db_url and "ssl=" not in env_db_url and "sslmode=" not in env_db_url:
+        separator = "&" if "?" in env_db_url else "?"
+        # For asyncpg, use both ssl=require and sslmode=require for compatibility
+        env_db_url = f"{env_db_url}{separator}ssl=require&sslmode=require"
     config.set_main_option("sqlalchemy.url", env_db_url)
+else:
+    # Fall back to settings which has the conversion logic
+    config.set_main_option("sqlalchemy.url", settings.database_url)
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.

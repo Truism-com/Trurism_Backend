@@ -143,19 +143,22 @@ app = FastAPI(
 )
 
 # Add CORS middleware
+# Use configured CORS origins, or allow all in debug mode
+cors_origins = settings.cors_origins if not settings.debug or settings.cors_origins != ["*"] else ["*"]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"] if settings.debug else ["https://yourdomain.com"],
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 # Add trusted host middleware for production
-if not settings.debug:
+# Only add if trusted_hosts is configured and not "*" in production
+if not settings.debug and settings.trusted_hosts and settings.trusted_hosts != ["*"]:
     app.add_middleware(
         TrustedHostMiddleware,
-        allowed_hosts=["yourdomain.com", "*.yourdomain.com"]
+        allowed_hosts=settings.trusted_hosts
     )
 
 
