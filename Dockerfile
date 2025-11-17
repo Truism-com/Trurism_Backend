@@ -18,8 +18,12 @@ RUN pip install --upgrade pip && pip install -r requirements.txt
 # Copy application
 COPY . .
 
+# Copy and make startup script executable
+COPY start.sh /app/start.sh
+RUN chmod +x /app/start.sh
+
 # Expose default port (Render will supply $PORT env var at runtime)
 EXPOSE 8000
 
-# Start the app using Uvicorn. Render provides $PORT; fallback to 8000.
-CMD ["/bin/sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1"]
+# Start the app using the startup script
+CMD ["/app/start.sh"]

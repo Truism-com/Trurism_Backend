@@ -6,35 +6,59 @@ services:
     name: travel-booking-api
     plan: free
     dockerfilePath: Dockerfile
-    runtime: python
-    # startCommand is taken from Dockerfile CMD when using docker env
+    env: docker
+    # Database will be linked via environment variables
+    # Migrations run on startup via startup script in Dockerfile
+    healthCheckPath: /health
+    envVars:
+      # Render provides postgresql:// URL, startup script converts to postgresql+asyncpg://
+      # Use internalConnectionString for better performance and reliability on same account
+      - key: DATABASE_URL
+        fromDatabase:
+          name: travel-booking-db
+          property: internalConnectionString
+      - key: JWT_SECRET_KEY
+        generateValue: true
+      - key: DEBUG
+        value: "false"
+      - key: ENVIRONMENT
+        value: "production"
+      # Redis URL - create Redis instance in Render dashboard and set manually
+      # Or use external Redis service
+      - key: REDIS_URL
+        value: ""  # Set this manually in Render dashboard after creating Redis
+      - key: CELERY_BROKER_URL
+        sync: false  # Set manually if using Celery
+      - key: CELERY_RESULT_BACKEND
+        sync: false  # Set manually if using Celery
 
   - type: worker
     name: travel-booking-worker
     plan: free
     dockerfilePath: Dockerfile
+    env: docker
     # Optional — enable if you have Celery configured and app.celery exists
     startCommand: "celery -A app.celery worker --loglevel=info"
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: travel-booking-db
+          property: internalConnectionString
+      - key: REDIS_URL
+        value: ""  # Set this manually in Render dashboard
+      - key: CELERY_BROKER_URL
+        sync: false
+      - key: CELERY_RESULT_BACKEND
+        sync: false
+
 databases:
   - name: travel-booking-db
     plan: starter
     # region: choose your nearest region (e.g., oregon, frankfurt, singapore)
 
-services_env:
-  - service: travel-booking-api
-    env_vars:
-      - key: DATABASE_URL
-      - key: REDIS_URL
-      - key: JWT_SECRET_KEY
-      - key: DEBUG
-
-  - service: travel-booking-worker
-    env_vars:
-      - key: DATABASE_URL
-      - key: REDIS_URL
-      - key: CELERY_BROKER_URL
-      - key: CELERY_RESULT_BACKEND
-
-# Optionally provision a managed Redis instance via Render's dashboard
-# Render doesn't support managed Redis via manifest at the time of writing
-# so create a Redis instance in the Render dashboard and copy REDIS_URL to env
+# Note: Render doesn't support managed Redis via manifest at the time of writing
+# Steps to set up Redis:
+# 1. Create a Redis instance in Render dashboard (or use external Redis service)
+# 2. Copy the Redis connection URL
+# 3. Set REDIS_URL environment variable in both services
+# 4. Set CELERY_BROKER_URL and CELERY_RESULT_BACKEND if using Celery

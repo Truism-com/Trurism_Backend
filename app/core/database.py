@@ -16,13 +16,24 @@ from typing import AsyncGenerator
 
 from app.core.config import settings
 
+# Connection arguments for asyncpg SSL support
+# SSL is typically required for managed databases like Render PostgreSQL
+# The URL already includes ssl=require if needed, but we also set it in connect_args
+# for explicit SSL configuration with asyncpg
+connect_args = {}
+if "ssl=require" in settings.database_url or "sslmode=require" in settings.database_url:
+    # For asyncpg, use ssl='require' for SSL connections
+    # asyncpg accepts ssl as a string ('require', 'allow', 'prefer', etc.) or boolean
+    connect_args["ssl"] = "require"
+
 # Database engine for async operations
 engine = create_async_engine(
     settings.database_url,
     pool_size=settings.database_pool_size,
     max_overflow=settings.database_max_overflow,
     echo=settings.debug,  # Log SQL queries in debug mode
-    future=True
+    future=True,
+    connect_args=connect_args if connect_args else {}
 )
 
 # Async session factory
