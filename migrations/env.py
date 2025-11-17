@@ -25,10 +25,10 @@ from app.booking.models import (
 # access to the values within the .ini file in use.
 config = context.config
 
-# Prefer DATABASE_URL environment variable (CI/CD) or pydantic settings
-# Use settings.database_url to ensure asyncpg conversion is applied
+# Prefer DATABASE_URL or SQLALCHEMY_URL environment variable when present
+# Use settings.database_url to ensure asyncpg conversion is applied as fallback
 from app.core.config import settings
-env_db_url = os.getenv("DATABASE_URL")
+env_db_url = os.getenv("DATABASE_URL") or os.getenv("SQLALCHEMY_URL")
 if env_db_url:
     # Convert postgresql:// to postgresql+asyncpg:// if needed (Render compatibility)
     if env_db_url.startswith("postgresql://") and not env_db_url.startswith("postgresql+asyncpg://"):
