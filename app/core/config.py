@@ -44,6 +44,15 @@ class Settings(BaseSettings):
         if self.database_url.startswith("postgresql://") and not self.database_url.startswith("postgresql+asyncpg://"):
             self.database_url = self.database_url.replace("postgresql://", "postgresql+asyncpg://", 1)
         
+        # Add SSL requirements for Render PostgreSQL if not already present
+        # Render managed PostgreSQL requires SSL connections
+        if "postgresql+asyncpg://" in self.database_url and "ssl=" not in self.database_url and "sslmode=" not in self.database_url:
+            # Check if URL already has query parameters
+            separator = "&" if "?" in self.database_url else "?"
+            # For asyncpg, use ssl=require for SSL connections
+            # Also add sslmode=require for compatibility
+            self.database_url = f"{self.database_url}{separator}ssl=require&sslmode=require"
+        
         # Parse CORS origins if provided as comma-separated string
         if isinstance(self.cors_origins, str):
             self.cors_origins = [origin.strip() for origin in self.cors_origins.split(",")] if self.cors_origins != "*" else ["*"]

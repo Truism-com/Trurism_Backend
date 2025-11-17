@@ -26,10 +26,22 @@ from app.booking.models import (
 config = context.config
 
 # Prefer DATABASE_URL environment variable (CI/CD) or pydantic settings
+# Use settings.database_url to ensure asyncpg conversion is applied
 from app.core.config import settings
-env_db_url = os.getenv("DATABASE_URL") or getattr(settings, "database_url", None)
+env_db_url = os.getenv("DATABASE_URL")
 if env_db_url:
+    # Convert postgresql:// to postgresql+asyncpg:// if needed (Render compatibility)
+    if env_db_url.startswith("postgresql://") and not env_db_url.startswith("postgresql+asyncpg://"):
+        env_db_url = env_db_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+    # Add SSL requirements for Render PostgreSQL if not already present
+    if "postgresql+asyncpg://" in env_db_url and "ssl=" not in env_db_url and "sslmode=" not in env_db_url:
+        separator = "&" if "?" in env_db_url else "?"
+        # For asyncpg, use both ssl=require and sslmode=require for compatibility
+        env_db_url = f"{env_db_url}{separator}ssl=require&sslmode=require"
     config.set_main_option("sqlalchemy.url", env_db_url)
+else:
+    # Fall back to settings which has the conversion logic
+    config.set_main_option("sqlalchemy.url", settings.database_url)
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.

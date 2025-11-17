@@ -6,16 +6,17 @@ services:
     name: travel-booking-api
     plan: free
     dockerfilePath: Dockerfile
-    runtime: python
+    env: docker
     # Database will be linked via environment variables
     # Migrations run on startup via startup script in Dockerfile
     healthCheckPath: /health
     envVars:
       # Render provides postgresql:// URL, startup script converts to postgresql+asyncpg://
+      # Use internalConnectionString for better performance and reliability on same account
       - key: DATABASE_URL
         fromDatabase:
           name: travel-booking-db
-          property: connectionString
+          property: internalConnectionString
       - key: JWT_SECRET_KEY
         generateValue: true
       - key: DEBUG
@@ -35,13 +36,14 @@ services:
     name: travel-booking-worker
     plan: free
     dockerfilePath: Dockerfile
+    env: docker
     # Optional — enable if you have Celery configured and app.celery exists
     startCommand: "celery -A app.celery worker --loglevel=info"
     envVars:
       - key: DATABASE_URL
         fromDatabase:
           name: travel-booking-db
-          property: connectionString
+          property: internalConnectionString
       - key: REDIS_URL
         value: ""  # Set this manually in Render dashboard
       - key: CELERY_BROKER_URL
