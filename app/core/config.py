@@ -69,8 +69,8 @@ class Settings(BaseSettings):
         
         return self
     
-    # Redis Settings
-    redis_url: str = "redis://localhost:6379"
+    # Redis Settings (Optional - set via environment variable)
+    redis_url: Optional[str] = None
     redis_db: int = 0
     
     # JWT Settings
@@ -79,9 +79,9 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 15
     refresh_token_expire_days: int = 7
 
-    # Celery / Background worker settings
-    celery_broker_url: str = "redis://localhost:6379/1"
-    celery_result_backend: str = "redis://localhost:6379/2"
+    # Celery / Background worker settings (Optional - set via environment variable)
+    celery_broker_url: Optional[str] = None
+    celery_result_backend: Optional[str] = None
     
     # Security Settings
     bcrypt_rounds: int = 12
