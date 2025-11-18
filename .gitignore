@@ -379,7 +379,7 @@ dump.rdb
 *.cert
 
 # Docker
-.dockerignore
+# .dockerignore should be in git to prevent .env from being copied to containers
 docker-compose.override.yml
 
 # Kubernetes
