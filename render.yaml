@@ -32,24 +32,26 @@ services:
       - key: CELERY_RESULT_BACKEND
         sync: false  # Set manually if using Celery
 
-  - type: worker
-    name: travel-booking-worker
-    plan: free
-    dockerfilePath: Dockerfile
-    env: docker
-    # Optional — enable if you have Celery configured and app.celery exists
-    startCommand: "celery -A app.celery worker --loglevel=info"
-    envVars:
-      - key: DATABASE_URL
-        fromDatabase:
-          name: travel-booking-db
-          property: internalConnectionString
-      - key: REDIS_URL
-        value: ""  # Set this manually in Render dashboard
-      - key: CELERY_BROKER_URL
-        sync: false
-      - key: CELERY_RESULT_BACKEND
-        sync: false
+  # CELERY WORKER - DISABLED UNTIL REDIS IS CONFIGURED
+  # Uncomment and configure after setting up Redis
+  # - type: worker
+  #   name: travel-booking-worker
+  #   plan: free
+  #   dockerfilePath: Dockerfile
+  #   env: docker
+  #   # Correct command: celery -A app.celery.celery_app worker --loglevel=info
+  #   startCommand: "celery -A app.celery.celery_app worker --loglevel=info"
+  #   envVars:
+  #     - key: DATABASE_URL
+  #       fromDatabase:
+  #         name: travel-booking-db
+  #         property: internalConnectionString
+  #     - key: REDIS_URL
+  #       value: ""  # Set this manually in Render dashboard
+  #     - key: CELERY_BROKER_URL
+  #       sync: false
+  #     - key: CELERY_RESULT_BACKEND
+  #       sync: false
 
 databases:
   - name: travel-booking-db

@@ -64,17 +64,19 @@ async def lifespan(app: FastAPI):
             raise Exception("Database connection failed")
         
         logger.info("Database health check passed")
-        # Check Redis (if configured)
+        # Check Redis (if configured) - Non-blocking, optional service
         try:
-            if settings.redis_url:
+            if settings.redis_url and not settings.redis_url.startswith("redis://localhost"):
                 # use a short-lived client to ping Redis
                 client = redis_async.from_url(settings.redis_url, encoding="utf-8", decode_responses=True)
                 pong = await client.ping()
                 if pong:
                     logger.info("Redis ping successful")
                 await client.close()
+            else:
+                logger.info("Redis not configured or using localhost - skipping health check")
         except Exception as re:
-            logger.warning(f"Redis health check failed: {re}")
+            logger.warning(f"Redis health check failed (non-critical): {re}")
         
         # TODO: Initialize Redis connection
         # TODO: Initialize external API clients

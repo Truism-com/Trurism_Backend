@@ -15,9 +15,12 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# Use settings if provided, otherwise empty strings
-broker = settings.celery_broker_url or None
-backend = settings.celery_result_backend or None
+# Use settings if provided, otherwise None (Celery won't work but won't crash)
+broker = settings.celery_broker_url
+backend = settings.celery_result_backend
+
+if not broker:
+    logger.warning("CELERY_BROKER_URL not configured. Celery tasks will not work.")
 
 celery_app = Celery(
     "app",
