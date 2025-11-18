@@ -8,9 +8,9 @@ It sets up the database connection, imports all models, and configures migration
 import asyncio
 import os
 from logging.config import fileConfig
-from sqlalchemy import pool
+from sqlalchemy import pool, engine_from_config
 from sqlalchemy.engine import Connection
-from sqlalchemy.ext.asyncio import async_engine_from_config
+from sqlalchemy.ext.asyncio import AsyncEngine
 from alembic import context
 
 # Import your models here
@@ -21,36 +21,12 @@ from app.booking.models import (
     FlightBookingPassenger
 )
 
+# Import settings to get database URL
+from app.core.config import settings
+
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
-
-# Prefer DATABASE_URL or SQLALCHEMY_URL environment variable when present
-# Use settings.database_url to ensure asyncpg conversion is applied as fallback
-from app.core.config import settings
-env_db_url = os.getenv("DATABASE_URL") or os.getenv("SQLALCHEMY_URL")
-if env_db_url:
-    # Convert postgresql:// to postgresql+asyncpg:// if needed (Render compatibility)
-    if env_db_url.startswith("postgresql://") and not env_db_url.startswith("postgresql+asyncpg://"):
-        env_db_url = env_db_url.replace("postgresql://", "postgresql+asyncpg://", 1)
-    # Add SSL requirements only for remote/production databases (e.g., Render PostgreSQL)
-    # Local databases typically don't require SSL
-    # Note: asyncpg only supports 'ssl' parameter, not 'sslmode'
-    if "postgresql+asyncpg://" in env_db_url and "ssl=" not in env_db_url:
-        # Check if this is a remote database that requires SSL
-        is_local = "localhost" in env_db_url or "127.0.0.1" in env_db_url
-        is_production = settings.environment in ["production", "staging"]
-        is_remote_host = any(host in env_db_url for host in ["render.com", ".onrender.com", ".amazonaws.com", "cloud", "managed"])
-        
-        # Only add SSL for remote/production databases, not local development
-        if (is_production or is_remote_host) and not is_local:
-            separator = "&" if "?" in env_db_url else "?"
-            # For asyncpg, use ssl=require for SSL connections
-            env_db_url = f"{env_db_url}{separator}ssl=require"
-    config.set_main_option("sqlalchemy.url", env_db_url)
-else:
-    # Fall back to settings which has the conversion logic
-    config.set_main_option("sqlalchemy.url", settings.database_url)
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
@@ -61,10 +37,42 @@ if config.config_file_name is not None:
 # for 'autogenerate' support
 target_metadata = Base.metadata
 
-# other values from the config, defined by the needs of env.py,
-# can be acquired:
-# my_important_option = config.get_main_option("my_important_option")
-# ... etc.
+
+def get_url():
+    """
+    Get database URL from environment variable or settings.
+    
+    This function ensures we always use the environment DATABASE_URL in production
+    (e.g., Render) and never fall back to localhost. It converts postgresql:// 
+    to postgresql+asyncpg:// for asyncpg compatibility and adds SSL for remote databases.
+    """
+    # Prefer DATABASE_URL or SQLALCHEMY_URL from environment variables (required in production)
+    db_url = os.getenv("DATABASE_URL") or os.getenv("SQLALCHEMY_URL")
+    
+    # If not in environment, use settings (which reads from .env file)
+    if not db_url:
+        db_url = settings.database_url
+    
+    # Convert postgresql:// to postgresql+asyncpg:// if needed (Render compatibility)
+    if db_url.startswith("postgresql://") and not db_url.startswith("postgresql+asyncpg://"):
+        db_url = db_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+    
+    # Add SSL requirements only for remote/production databases (e.g., Render PostgreSQL)
+    # Local databases typically don't require SSL
+    # Note: asyncpg only supports 'ssl' parameter, not 'sslmode'
+    if "postgresql+asyncpg://" in db_url and "ssl=" not in db_url:
+        # Check if this is a remote database that requires SSL
+        is_local = "localhost" in db_url or "127.0.0.1" in db_url
+        is_production = settings.environment in ["production", "staging"]
+        is_remote_host = any(host in db_url for host in ["render.com", ".onrender.com", ".amazonaws.com", "cloud", "managed"])
+        
+        # Only add SSL for remote/production databases, not local development
+        if (is_production or is_remote_host) and not is_local:
+            separator = "&" if "?" in db_url else "?"
+            # For asyncpg, use ssl=require for SSL connections
+            db_url = f"{db_url}{separator}ssl=require"
+    
+    return db_url
 
 
 def run_migrations_offline() -> None:
@@ -79,12 +87,12 @@ def run_migrations_offline() -> None:
     script output.
 
     """
-    url = config.get_main_option("sqlalchemy.url")
+    url = get_url()
     context.configure(
         url=url,
         target_metadata=target_metadata,
         literal_binds=True,
-        dialect_opts={"paramstyle": "named"},
+        compare_type=True,
     )
 
     with context.begin_transaction():
@@ -92,31 +100,39 @@ def run_migrations_offline() -> None:
 
 
 def do_run_migrations(connection: Connection) -> None:
-    context.configure(connection=connection, target_metadata=target_metadata)
+    context.configure(
+        connection=connection,
+        target_metadata=target_metadata,
+        compare_type=True
+    )
 
     with context.begin_transaction():
         context.run_migrations()
 
 
-async def run_async_migrations() -> None:
-    """In this scenario we need to create an Engine
-    and associate a connection with the context.
-
-    """
-    connectable = async_engine_from_config(
-        config.get_section(config.config_ini_section, {}),
-        prefix="sqlalchemy.",
-        poolclass=pool.NullPool,
-    )
-
-    async with connectable.connect() as connection:
-        await connection.run_sync(do_run_migrations)
-
-    await connectable.dispose()
-
-
 def run_migrations_online() -> None:
     """Run migrations in 'online' mode."""
+    url = get_url()
+    
+    # Create async engine using the URL from get_url()
+    # This ensures we use the Render database URL, not localhost
+    connectable = AsyncEngine(
+        engine_from_config(
+            {"sqlalchemy.url": url},
+            prefix="sqlalchemy.",
+            poolclass=pool.NullPool,
+            future=True,
+        )
+    )
+
+    async def do_run_migrations_async(connection: Connection):
+        await connection.run_sync(do_run_migrations)
+
+    async def run_async_migrations():
+        async with connectable.connect() as connection:
+            await do_run_migrations_async(connection)
+        await connectable.dispose()
+
     asyncio.run(run_async_migrations())
 
 
