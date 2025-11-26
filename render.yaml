@@ -1,4 +1,5 @@
 # Render manifest for Travel Booking Platform
+# Using Supabase PostgreSQL Database (external)
 # See https://render.com/docs/deploying-with-manifest for details
 
 services:
@@ -7,16 +8,16 @@ services:
     plan: free
     dockerfilePath: Dockerfile
     env: docker
-    # Database will be linked via environment variables
+    # Using Supabase PostgreSQL - database is hosted externally
     # Migrations run on startup via startup script in Dockerfile
     healthCheckPath: /health
     envVars:
-      # Render provides postgresql:// URL, startup script converts to postgresql+asyncpg://
-      # Use internalConnectionString for better performance and reliability on same account
+      # ⚠️ IMPORTANT: Set this manually in Render dashboard after deployment!
+      # Get from Supabase: Project Settings → Database → Connection string (URI)
+      # Use the POOLER connection (port 6543) for better performance:
+      # postgresql://postgres.[PROJECT-REF]:[PASSWORD]@aws-0-[REGION].pooler.supabase.com:6543/postgres
       - key: DATABASE_URL
-        fromDatabase:
-          name: travel-booking-db
-          property: internalConnectionString
+        sync: false  # Must be set manually in Render dashboard
       - key: JWT_SECRET_KEY
         generateValue: true
       - key: DEBUG
@@ -43,9 +44,7 @@ services:
   #   startCommand: "celery -A app.celery.celery_app worker --loglevel=info"
   #   envVars:
   #     - key: DATABASE_URL
-  #       fromDatabase:
-  #         name: travel-booking-db
-  #         property: internalConnectionString
+  #       sync: false
   #     - key: REDIS_URL
   #       value: ""  # Set this manually in Render dashboard
   #     - key: CELERY_BROKER_URL
@@ -53,10 +52,11 @@ services:
   #     - key: CELERY_RESULT_BACKEND
   #       sync: false
 
-databases:
-  - name: travel-booking-db
-    plan: starter
-    # region: choose your nearest region (e.g., oregon, frankfurt, singapore)
+# ⚠️ DATABASE SECTION REMOVED - Using Supabase PostgreSQL instead
+# No need to create a database in Render since we're using external Supabase
+# databases:
+#   - name: travel-booking-db
+#     plan: starter
 
 # Note: Render doesn't support managed Redis via manifest at the time of writing
 # Steps to set up Redis:
@@ -64,3 +64,4 @@ databases:
 # 2. Copy the Redis connection URL
 # 3. Set REDIS_URL environment variable in both services
 # 4. Set CELERY_BROKER_URL and CELERY_RESULT_BACKEND if using Celery
+

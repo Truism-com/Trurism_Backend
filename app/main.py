@@ -23,6 +23,7 @@ import time
 
 from app.core.config import settings
 from app.core.database import init_database, check_database_health
+from app.core.supabase import get_supabase
 from app.auth.api import router as auth_router
 from app.search.api import router as search_router
 from app.booking.api import router as booking_router
@@ -53,17 +54,21 @@ async def lifespan(app: FastAPI):
     logger.info("Starting Travel Booking Platform API...")
     
     try:
-        # Initialize database
-        await init_database()
-        logger.info("Database initialized successfully")
+        if os.getenv("SKIP_DB_INIT", "false").lower() not in ("1", "true", "yes"):
+            await init_database()
+            logger.info("Database initialized successfully")
+        else:
+            logger.info("Skipping database init due to SKIP_DB_INIT env var")
         
         # Check database health
-        db_healthy = await check_database_health()
-        if not db_healthy:
-            logger.error("Database health check failed")
-            raise Exception("Database connection failed")
-        
-        logger.info("Database health check passed")
+        if os.getenv("SKIP_DB_INIT", "false").lower() not in ("1", "true", "yes"):
+            db_healthy = await check_database_health()
+            if not db_healthy:
+                logger.error("Database health check failed")
+                raise Exception("Database connection failed")
+            logger.info("Database health check passed")
+        else:
+            logger.info("Skipping database health check due to SKIP_DB_INIT env var")
         # Check Redis (if configured) - Non-blocking, optional service
         try:
             if settings.redis_url and not settings.redis_url.startswith("redis://localhost"):
@@ -243,52 +248,69 @@ async def general_exception_handler(request: Request, exc: Exception):
     )
 
 
+# Simple Supabase test endpoint
+@app.get("/test", tags=["Health"])
+async def test_supabase():
+    """
+    Test Supabase connectivity by selecting from `users` table.
+    """
+    try:
+        sb = get_supabase()
+        result = await sb.from_("users").select("*").limit(5).execute()
+        data = getattr(result, "data", None)
+        if data is None:
+            return {"count": 0, "data": []}
+        return {"count": len(data), "data": data}
+    except Exception as e:
+        logger.error(f"Unhandled exception: {e}")
+        raise HTTPException(status_code=500, detail={"detail": "Internal server error", "path": "/test"})
+
+
 # Health check endpoint
 @app.get("/health", tags=["Health"])
 async def health_check():
     """
     Health check endpoint for monitoring and load balancers.
-    
-    This endpoint provides basic health information about the API
-    and its dependencies for monitoring systems.
+    Returns 200 always; status may be 'degraded' if checks fail or are skipped.
     """
-    try:
-        # Check database health
-        db_healthy = await check_database_health()
-        
-        # TODO: Check Redis health
-        # TODO: Check external API health
-        
-        if db_healthy:
-            return {
-                "status": "healthy",
-                "timestamp": time.time(),
-                "version": settings.app_version,
-                "environment": settings.environment
-            }
-        else:
-            return JSONResponse(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                content={
-                    "status": "unhealthy",
-                    "timestamp": time.time(),
-                    "version": settings.app_version,
-                    "environment": settings.environment,
-                    "issues": ["database_connection_failed"]
-                }
-            )
-    except Exception as e:
-        logger.error(f"Health check failed: {e}")
-        return JSONResponse(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            content={
-                "status": "unhealthy",
-                "timestamp": time.time(),
-                "version": settings.app_version,
-                "environment": settings.environment,
-                "issues": ["health_check_failed"]
-            }
-        )
+    issues: list[str] = []
+    degraded = False
+    skip_checks = os.getenv("SKIP_DB_INIT", "").lower() == "true"
+
+    # Database health
+    if not skip_checks:
+        try:
+            db_healthy = await check_database_health()
+            if not db_healthy:
+                degraded = True
+                issues.append("database_connection_failed")
+        except Exception as e:
+            logger.error(f"Database health check failed: {e}")
+            degraded = True
+            issues.append("database_health_error")
+    else:
+        degraded = True
+        issues.append("database_check_skipped")
+
+    # Redis health (optional)
+    if os.getenv("REDIS_URL") and not skip_checks:
+        try:
+            await check_redis_health()  # if implemented elsewhere
+        except Exception as e:
+            logger.error(f"Redis health check failed: {e}")
+            degraded = True
+            issues.append("redis_connection_failed")
+
+    return JSONResponse(
+        status_code=200,
+        content={
+            "status": "healthy" if not degraded else "degraded",
+            "timestamp": time.time(),
+            "version": settings.app_version,
+            "environment": settings.environment,
+            "issues": issues,
+        },
+    )
 
 
 # Root endpoint

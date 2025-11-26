@@ -47,17 +47,28 @@ class Settings(BaseSettings):
         # Add SSL requirements only for remote/production databases (e.g., Render PostgreSQL)
         # Local databases typically don't require SSL
         # Note: asyncpg only supports 'ssl' parameter, not 'sslmode'
-        if "postgresql+asyncpg://" in self.database_url and "ssl=" not in self.database_url:
-            # Check if this is a remote database that requires SSL
-            is_local = "localhost" in self.database_url or "127.0.0.1" in self.database_url
-            is_production = self.environment in ["production", "staging"]
-            is_remote_host = any(host in self.database_url for host in ["render.com", ".onrender.com", ".amazonaws.com", "cloud", "managed"])
-            
-            # Only add SSL for remote/production databases, not local development
-            if (is_production or is_remote_host) and not is_local:
+        if "postgresql+asyncpg://" in self.database_url:
+            # Map sslmode=require to ssl=require for asyncpg
+            if "sslmode=require" in self.database_url and "ssl=" not in self.database_url:
                 separator = "&" if "?" in self.database_url else "?"
-                # For asyncpg, use ssl=require for SSL connections
                 self.database_url = f"{self.database_url}{separator}ssl=require"
+            # Remove sslmode parameter entirely (asyncpg doesn't accept it)
+            if "sslmode=" in self.database_url:
+                self.database_url = self.database_url.replace("sslmode=require", "")
+                # Clean up any leftover query artifacts
+                self.database_url = self.database_url.replace("?&", "?").replace("&&", "&").rstrip("?&")
+            
+            if "ssl=" not in self.database_url:
+                # Check if this is a remote database that requires SSL
+                is_local = "localhost" in self.database_url or "127.0.0.1" in self.database_url
+                is_production = self.environment in ["production", "staging"]
+                is_remote_host = any(host in self.database_url for host in ["render.com", ".onrender.com", ".amazonaws.com", "cloud", "managed", ".supabase.co"])
+                
+                # Only add SSL for remote/production databases, not local development
+                if (is_production or is_remote_host) and not is_local:
+                    separator = "&" if "?" in self.database_url else "?"
+                    # For asyncpg, use ssl=require for SSL connections
+                    self.database_url = f"{self.database_url}{separator}ssl=require"
         
         # Parse CORS origins if provided as comma-separated string
         if isinstance(self.cors_origins, str):
@@ -135,7 +146,8 @@ class Settings(BaseSettings):
     
     model_config = {
         "env_file": ".env",
-        "case_sensitive": False
+        "case_sensitive": False,
+        "extra": "ignore"  # ignore unrelated env vars like SUPABASE_URL
     }
 
 
