@@ -47,30 +47,42 @@ def get_url():
     to postgresql+asyncpg:// for asyncpg compatibility and adds SSL for remote databases.
     """
     # Prefer DATABASE_URL or SQLALCHEMY_URL from environment variables (required in production)
-    db_url = os.getenv("DATABASE_URL") or os.getenv("SQLALCHEMY_URL")
+    # Prefer a dedicated migration URL (e.g., Supabase transaction pooler or psycopg)
+    db_url = os.getenv("DATABASE_MIGRATION_URL") or os.getenv("DATABASE_URL") or os.getenv("SQLALCHEMY_URL")
     
     # If not in environment, use settings (which reads from .env file)
     if not db_url:
         db_url = settings.database_url
     
-    # Convert postgresql:// to postgresql+asyncpg:// if needed (Render compatibility)
-    if db_url.startswith("postgresql://") and not db_url.startswith("postgresql+asyncpg://"):
+    # Convert postgresql:// to postgresql+asyncpg:// for async migrations
+    # If user provides a psycopg URL for migrations, keep it as-is
+    if db_url.startswith("postgresql://") and not (db_url.startswith("postgresql+asyncpg://") or db_url.startswith("postgresql+psycopg://")):
         db_url = db_url.replace("postgresql://", "postgresql+asyncpg://", 1)
     
     # Add SSL requirements only for remote/production databases (e.g., Render PostgreSQL)
     # Local databases typically don't require SSL
     # Note: asyncpg only supports 'ssl' parameter, not 'sslmode'
-    if "postgresql+asyncpg://" in db_url and "ssl=" not in db_url:
-        # Check if this is a remote database that requires SSL
-        is_local = "localhost" in db_url or "127.0.0.1" in db_url
-        is_production = settings.environment in ["production", "staging"]
-        is_remote_host = any(host in db_url for host in ["render.com", ".onrender.com", ".amazonaws.com", "cloud", "managed"])
-        
-        # Only add SSL for remote/production databases, not local development
-        if (is_production or is_remote_host) and not is_local:
+    if "postgresql+asyncpg://" in db_url:
+        # Map sslmode=require to ssl=require for asyncpg
+        if "sslmode=require" in db_url and "ssl=" not in db_url:
             separator = "&" if "?" in db_url else "?"
-            # For asyncpg, use ssl=require for SSL connections
             db_url = f"{db_url}{separator}ssl=require"
+        # Remove sslmode parameter entirely (asyncpg doesn't accept it)
+        if "sslmode=" in db_url:
+            db_url = db_url.replace("sslmode=require", "")
+            db_url = db_url.replace("?&", "?").replace("&&", "&").rstrip("?&")
+        
+        if "ssl=" not in db_url:
+            # Check if this is a remote database that requires SSL
+            is_local = "localhost" in db_url or "127.0.0.1" in db_url
+            is_production = settings.environment in ["production", "staging"]
+            is_remote_host = any(host in db_url for host in ["render.com", ".onrender.com", ".amazonaws.com", "cloud", "managed", ".supabase.co"])
+            
+            # Only add SSL for remote/production databases, not local development
+            if (is_production or is_remote_host) and not is_local:
+                separator = "&" if "?" in db_url else "?"
+                # For asyncpg, use ssl=require for SSL connections
+                db_url = f"{db_url}{separator}ssl=require"
     
     return db_url
 
@@ -114,16 +126,24 @@ def run_migrations_online() -> None:
     """Run migrations in 'online' mode."""
     url = get_url()
     
-    # Create async engine using the URL from get_url()
-    # This ensures we use the Render database URL, not localhost
-    connectable = AsyncEngine(
-        engine_from_config(
+    # Choose engine type based on driver: psycopg -> sync, asyncpg -> async
+    is_psycopg = url.startswith("postgresql+psycopg://")
+    if is_psycopg:
+        connectable = engine_from_config(
             {"sqlalchemy.url": url},
             prefix="sqlalchemy.",
             poolclass=pool.NullPool,
             future=True,
         )
-    )
+    else:
+        connectable = AsyncEngine(
+            engine_from_config(
+                {"sqlalchemy.url": url},
+                prefix="sqlalchemy.",
+                poolclass=pool.NullPool,
+                future=True,
+            )
+        )
 
     async def do_run_migrations_async(connection: Connection):
         await connection.run_sync(do_run_migrations)
@@ -133,7 +153,15 @@ def run_migrations_online() -> None:
             await do_run_migrations_async(connection)
         await connectable.dispose()
 
-    asyncio.run(run_async_migrations())
+    def run_sync_migrations():
+        with connectable.connect() as connection:
+            do_run_migrations(connection)
+        connectable.dispose()
+
+    if is_psycopg:
+        run_sync_migrations()
+    else:
+        asyncio.run(run_async_migrations())
 
 
 if context.is_offline_mode():

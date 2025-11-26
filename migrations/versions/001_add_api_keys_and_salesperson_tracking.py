@@ -15,7 +15,7 @@ from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision: str = '001'
-down_revision: Union[str, None] = None
+down_revision: Union[str, None] = '000'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -49,41 +49,7 @@ def upgrade() -> None:
     op.create_index('ix_api_keys_key_hash', 'api_keys', ['key_hash'], unique=True)
     op.create_index('ix_api_keys_is_active', 'api_keys', ['is_active'], unique=False)
     
-    # Add created_by_id to flight_bookings
-    op.add_column('flight_bookings', 
-        sa.Column('created_by_id', sa.Integer(), nullable=True)
-    )
-    op.create_foreign_key(
-        'fk_flight_bookings_created_by_id',
-        'flight_bookings', 'users',
-        ['created_by_id'], ['id'],
-        ondelete='SET NULL'
-    )
-    op.create_index('ix_flight_bookings_created_by_id', 'flight_bookings', ['created_by_id'], unique=False)
-    
-    # Add created_by_id to hotel_bookings
-    op.add_column('hotel_bookings',
-        sa.Column('created_by_id', sa.Integer(), nullable=True)
-    )
-    op.create_foreign_key(
-        'fk_hotel_bookings_created_by_id',
-        'hotel_bookings', 'users',
-        ['created_by_id'], ['id'],
-        ondelete='SET NULL'
-    )
-    op.create_index('ix_hotel_bookings_created_by_id', 'hotel_bookings', ['created_by_id'], unique=False)
-    
-    # Add created_by_id to bus_bookings
-    op.add_column('bus_bookings',
-        sa.Column('created_by_id', sa.Integer(), nullable=True)
-    )
-    op.create_foreign_key(
-        'fk_bus_bookings_created_by_id',
-        'bus_bookings', 'users',
-        ['created_by_id'], ['id'],
-        ondelete='SET NULL'
-    )
-    op.create_index('ix_bus_bookings_created_by_id', 'bus_bookings', ['created_by_id'], unique=False)
+    # created_by_id columns already exist from base migration
 
 
 def downgrade() -> None:
