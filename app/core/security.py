@@ -23,7 +23,10 @@ from app.core.config import settings
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # Async Redis client for token blacklisting
-redis_client = redis.from_url(settings.redis_url, decode_responses=True)
+if settings.redis_url and settings.redis_url.lower() != "none":
+    redis_client = redis.from_url(settings.redis_url, decode_responses=True)
+else:
+    redis_client = None
 
 
 class SecurityManager:
@@ -162,6 +165,9 @@ class SecurityManager:
             ttl = None
 
         key = f"blacklist:{token}"
+        if redis_client is None:
+            # Redis not configured, skip blacklisting
+            return
         if ttl:
             redis_client.setex(key, ttl, "true")
         else:
@@ -180,6 +186,9 @@ class SecurityManager:
             bool: True if token is blacklisted, False otherwise
         """
         try:
+            if redis_client is None:
+                # Redis not configured, fail open (do not block valid tokens)
+                return False
             return redis_client.exists(f"blacklist:{token}") > 0
         except Exception:
             # If Redis is unavailable, fail open (do not block valid tokens)
