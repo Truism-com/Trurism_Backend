@@ -23,7 +23,10 @@ from app.api_keys.schemas import APIKeyCreate, APIKeyUpdate
 from app.core.config import settings
 
 # Async Redis client for API key caching
-redis_client = redis.from_url(settings.redis_url, decode_responses=True)
+if settings.redis_url and settings.redis_url.lower() != "none":
+    redis_client = redis.from_url(settings.redis_url, decode_responses=True)
+else:
+    redis_client = None
 
 
 class APIKeyService:

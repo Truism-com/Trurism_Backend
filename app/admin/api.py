@@ -531,9 +531,10 @@ async def get_system_health(
         # Check Redis health
         redis_healthy = False
         try:
-            redis_client = redis.from_url(settings.redis_url, decode_responses=True)
-            redis_client.ping()
-            redis_healthy = True
+            if settings.redis_url and settings.redis_url.lower() != "none":
+                redis_client = redis.from_url(settings.redis_url, decode_responses=True)
+                redis_client.ping()
+                redis_healthy = True
         except Exception:
             pass
         

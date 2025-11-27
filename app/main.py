@@ -71,7 +71,7 @@ async def lifespan(app: FastAPI):
             logger.info("Skipping database health check due to SKIP_DB_INIT env var")
         # Check Redis (if configured) - Non-blocking, optional service
         try:
-            if settings.redis_url and not settings.redis_url.startswith("redis://localhost"):
+            if settings.redis_url and settings.redis_url.lower() != "none" and not settings.redis_url.startswith("redis://localhost"):
                 # use a short-lived client to ping Redis
                 client = redis_async.from_url(settings.redis_url, encoding="utf-8", decode_responses=True)
                 pong = await client.ping()
@@ -293,7 +293,8 @@ async def health_check():
         issues.append("database_check_skipped")
 
     # Redis health (optional)
-    if os.getenv("REDIS_URL") and not skip_checks:
+    redis_url = os.getenv("REDIS_URL")
+    if redis_url and redis_url.lower() != "none" and not skip_checks:
         try:
             await check_redis_health()  # if implemented elsewhere
         except Exception as e:
