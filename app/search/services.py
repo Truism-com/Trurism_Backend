@@ -26,7 +26,10 @@ from app.search.schemas import (
 from app.core.config import settings
 
 # Redis client for search result caching (async)
-redis_client = redis.from_url(settings.redis_url, encoding="utf-8", decode_responses=True)
+if settings.redis_url and settings.redis_url.lower() != "none":
+    redis_client = redis.from_url(settings.redis_url, encoding="utf-8", decode_responses=True)
+else:
+    redis_client = None
 
 
 class SearchService:

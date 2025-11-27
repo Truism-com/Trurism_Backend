@@ -357,7 +357,14 @@ async def clear_search_cache(
         import redis
         from app.core.config import settings
         
-        redis_client = redis.from_url(settings.redis_url, decode_responses=True)
+        if settings.redis_url and settings.redis_url.lower() != "none":
+            redis_client = redis.from_url(settings.redis_url, decode_responses=True)
+        else:
+            return {
+                "message": "Redis is not configured",
+                "search_type": cache_request.search_type,
+                "reason": cache_request.reason
+            }
         
         # Clear specific cache key or all search cache
         if cache_request.cache_key:
