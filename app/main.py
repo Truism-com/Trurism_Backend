@@ -143,9 +143,9 @@ app = FastAPI(
     - 60 requests per minute per user
     - 1000 requests per hour per IP address
     """,
-    docs_url="/docs" if settings.debug else None,
-    redoc_url="/redoc" if settings.debug else None,
-    openapi_url="/openapi.json" if settings.debug else None,
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_url="/openapi.json",
     lifespan=lifespan
 )
 
