@@ -61,12 +61,14 @@ class PaymentMethod(str, enum.Enum):
     - NET_BANKING: Net banking
     - WALLET: Digital wallet payment
     - CASH: Cash payment (for offline bookings)
+    - AGENT_CREDIT: Agent credit payment (for B2B agents)
     """
     CARD = "card"
     UPI = "upi"
     NET_BANKING = "net_banking"
     WALLET = "wallet"
     CASH = "cash"
+    AGENT_CREDIT = "agent_credit"
 
 
 class PassengerType(str, enum.Enum):
