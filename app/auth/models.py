@@ -86,6 +86,8 @@ class User(Base):
     bus_bookings = relationship("BusBooking", back_populates="user")
     # Refresh tokens relationship
     refresh_tokens = relationship("RefreshToken", back_populates="user")
+    # Wallet relationship
+    wallet = relationship("Wallet", back_populates="user", uselist=False)
     
     def __repr__(self):
         return f"<User(id={self.id}, email={self.email}, role={self.role})>"

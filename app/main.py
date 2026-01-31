@@ -29,6 +29,11 @@ from app.search.api import router as search_router
 from app.booking.api import router as booking_router
 from app.admin.api import router as admin_router
 from app.api_keys.api import router as api_keys_router
+from app.tenant.api import router as tenant_router
+from app.markup.api import router as markup_router
+from app.payments.api import router as payments_router
+from app.wallet.api import router as wallet_router, admin_router as wallet_admin_router
+from app.tenant.middleware import TenantMiddleware
 import os
 import redis.asyncio as redis_async
 
@@ -159,6 +164,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Add tenant middleware for white-label support
+app.add_middleware(TenantMiddleware)
 
 # Add trusted host middleware for production
 # Only add if trusted_hosts is configured and not "*" in production
@@ -339,6 +347,11 @@ app.include_router(search_router)
 app.include_router(booking_router)
 app.include_router(admin_router)
 app.include_router(api_keys_router)
+app.include_router(tenant_router)
+app.include_router(markup_router)
+app.include_router(payments_router)
+app.include_router(wallet_router)
+app.include_router(wallet_admin_router)
 
 # Initialize openapi_tags if not exists
 if app.openapi_tags is None:
