@@ -98,15 +98,31 @@ class Settings(BaseSettings):
     bcrypt_rounds: int = 12
     rate_limit_per_minute: int = 60
     
-    # External API Settings - XML.Agency
+    # External API Settings - XML.Agency (Flights)
     xml_agency_base_url: str = "https://api.xmlagency.com"
     xml_agency_username: str = ""
     xml_agency_password: str = ""
     xml_agency_timeout: int = 30
     
+    # Flight API Settings (Generic)
+    flight_api_url: str = ""
+    flight_api_key: str = ""
+    flight_api_secret: str = ""
+    
+    # Bus API Settings
+    bus_api_url: str = ""
+    bus_api_key: str = ""
+    bus_api_secret: str = ""
+    
+    # Hotel API Settings
+    hotel_api_url: str = ""
+    hotel_api_key: str = ""
+    hotel_api_secret: str = ""
+    
     # Payment Gateway Settings - Razorpay
     razorpay_key_id: str = ""
     razorpay_key_secret: str = ""
+    razorpay_webhook_secret: str = ""
     
     # Email Settings
     mail_server: str = "smtp.gmail.com"

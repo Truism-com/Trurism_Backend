@@ -45,6 +45,9 @@ AsyncSessionLocal = async_sessionmaker(
     autoflush=False
 )
 
+# Alias for compatibility
+async_session_maker = AsyncSessionLocal
+
 # Base class for all database models
 class Base(DeclarativeBase):
     """
@@ -77,6 +80,10 @@ async def get_database_session() -> AsyncGenerator[AsyncSession, None]:
             await session.close()
 
 
+# Alias for common naming pattern
+get_db = get_database_session
+
+
 async def check_database_health() -> bool:
     """
     Check database connectivity and health.
@@ -105,9 +112,11 @@ async def init_database():
     """
     async with engine.begin() as conn:
         # Import all models to ensure they are registered
-        from app.auth.models import User
-        from app.booking.models import FlightBooking, HotelBooking, BusBooking
+        from app.auth.models import User, RefreshToken
+        from app.booking.models import FlightBooking, HotelBooking, BusBooking, PassengerInfo
         from app.api_keys.models import APIKey
+        from app.tenant.models import Tenant
+        from app.markup.models import MarkupRule
         
         # Create all tables
         await conn.run_sync(Base.metadata.create_all)
