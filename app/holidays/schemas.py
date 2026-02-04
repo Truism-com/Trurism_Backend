@@ -128,6 +128,16 @@ class ItineraryCreate(ItineraryBase):
     pass
 
 
+class ItineraryUpdate(BaseModel):
+    day_number: Optional[int] = Field(None, ge=1)
+    title: Optional[str] = Field(None, max_length=200)
+    description: Optional[str] = None
+    meals_included: Optional[str] = None
+    accommodation: Optional[str] = None
+    activities: Optional[str] = None
+    image_url: Optional[str] = None
+
+
 class ItineraryResponse(ItineraryBase):
     id: int
     package_id: int

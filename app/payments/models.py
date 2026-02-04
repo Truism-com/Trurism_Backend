@@ -143,39 +143,6 @@ class Refund(Base):
         return f"<Refund(id={self.id}, amount={self.amount}, status={self.status})>"
 
 
-class ConvenienceFee(Base):
-    """
-    Convenience fee configuration model.
-    
-    This model defines convenience fees charged for different
-    payment methods (cards, UPI, net banking, etc.).
-    """
-    __tablename__ = "convenience_fees"
-    
-    # Primary identification
-    id = Column(Integer, primary_key=True, index=True)
-    payment_method = Column(String(50), unique=True, nullable=False)
-    
-    # Fee configuration
-    fee_type = Column(Enum(FeeType), nullable=False)
-    fee_value = Column(Float, nullable=False)  # Amount or percentage
-    min_fee = Column(Float, default=0.0, nullable=False)
-    max_fee = Column(Float, nullable=True)
-    
-    # Applicability
-    is_active = Column(Boolean, default=True, nullable=False)
-    
-    # Description
-    description = Column(Text, nullable=True)
-    
-    # Audit fields
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
-    
-    def __repr__(self):
-        return f"<ConvenienceFee(method={self.payment_method}, type={self.fee_type}, value={self.fee_value})>"
-
-
 class WebhookLog(Base):
     """
     Webhook event log model.
