@@ -19,7 +19,7 @@ from app.wallet.services import (
     WalletService, WalletError, InsufficientBalanceError
 )
 from app.payments.services import RazorpayService, PaymentError
-from app.payments.models import PaymentStatus as TxnPaymentStatus
+from app.payments.models import PaymentTransactionStatus as TxnPaymentStatus
 from app.booking.models import PaymentStatus, PaymentMethod
 
 logger = logging.getLogger(__name__)

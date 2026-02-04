@@ -16,7 +16,7 @@ from app.holidays.models import (
     EnquiryStatus, PackageBookingStatus
 )
 from app.holidays.services import HolidayService, PackageEnquiryService
-from app.holidays.api import router, admin_router
+from app.holidays.api import router
 
 __all__ = [
     # Models
@@ -37,5 +37,4 @@ __all__ = [
     "PackageEnquiryService",
     # Routers
     "router",
-    "admin_router"
 ]
