@@ -26,7 +26,8 @@ from app.payments.schemas import (
     TransactionResponse, ConvenienceFeeCalculation
 )
 from app.payments.services import RazorpayService, WebhookService
-from app.payments.models import ConvenienceFee, PaymentTransaction, Refund
+from app.payments.models import PaymentTransaction, Refund
+from app.settings.models import ConvenienceFee
 
 logger = logging.getLogger(__name__)
 
