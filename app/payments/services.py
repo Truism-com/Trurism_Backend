@@ -19,13 +19,24 @@ from sqlalchemy import select, and_
 from fastapi import HTTPException, status
 
 from app.payments.models import (
-    PaymentTransaction, Refund, ConvenienceFee, WebhookLog,
+    PaymentTransaction, Refund, WebhookLog,
     PaymentTransactionStatus, RefundStatus, FeeType
 )
+from app.settings.models import ConvenienceFee
 from app.booking.models import FlightBooking, HotelBooking, BusBooking, BookingStatus, PaymentStatus
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
+
+
+class PaymentError(Exception):
+    """Base exception for payment-related errors."""
+    
+    def __init__(self, message: str, code: str = "PAYMENT_ERROR", details: Optional[Dict[str, Any]] = None):
+        self.message = message
+        self.code = code
+        self.details = details or {}
+        super().__init__(self.message)
 
 
 class RazorpayService:

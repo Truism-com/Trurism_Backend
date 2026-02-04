@@ -12,12 +12,19 @@ The application follows a modular architecture with separate modules for:
 - Administrative operations (admin)
 """
 
+import os
+os.environ.setdefault("RATELIMIT_STORAGE_URL", "memory://")
+
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from contextlib import asynccontextmanager
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 import logging
 import time
 
@@ -33,6 +40,15 @@ from app.tenant.api import router as tenant_router
 from app.markup.api import router as markup_router
 from app.payments.api import router as payments_router
 from app.wallet.api import router as wallet_router, admin_router as wallet_admin_router
+from app.holidays.api import router as holidays_router
+from app.visa.api import router as visa_router
+from app.activities.api import router as activities_router
+from app.transfers.api import router as transfers_router
+from app.cms.api import router as cms_router
+from app.settings.api import router as settings_router
+from app.dashboard.api import router as dashboard_router, admin_router as dashboard_admin_router
+from app.pricing.api import router as pricing_router, admin_router as pricing_admin_router
+from app.company.api import router as company_router
 from app.tenant.middleware import TenantMiddleware
 import os
 import redis.asyncio as redis_async
@@ -43,6 +59,15 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
+
+# Initialize rate limiter with in-memory storage
+_storage_uri = settings.redis_url if settings.redis_url and settings.redis_url.lower() != "none" else "memory://"
+limiter = Limiter(
+    key_func=get_remote_address,
+    default_limits=[f"{settings.rate_limit_requests}/{settings.rate_limit_period}seconds"],
+    storage_uri=_storage_uri,
+    headers_enabled=True
+)
 
 
 @asynccontextmanager
@@ -124,14 +149,14 @@ app = FastAPI(
     
     ## Features
     
-    * 🔐 Secure JWT-based authentication with role-based access control
-    * ✈️ Flight search and booking with multiple airlines
-    * 🏨 Hotel search and booking with filtering and amenities
-    * 🚌 Bus search and booking for inter-city travel
-    * 💳 Payment processing with multiple payment methods
-    * 📊 Admin dashboard with analytics and reporting
-    * 🔄 Real-time booking status updates
-    * 📱 RESTful API with comprehensive documentation
+    * Secure JWT-based authentication with role-based access control
+    * Flight search and booking with multiple airlines
+    * Hotel search and booking with filtering and amenities
+    * Bus search and booking for inter-city travel
+    * Payment processing with multiple payment methods
+    * Admin dashboard with analytics and reporting
+    * Real-time booking status updates
+    * RESTful API with comprehensive documentation
     
     ## Authentication
     
@@ -175,6 +200,37 @@ if not settings.debug and settings.trusted_hosts and settings.trusted_hosts != [
         TrustedHostMiddleware,
         allowed_hosts=settings.trusted_hosts
     )
+
+# Add rate limiting middleware
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_middleware(SlowAPIMiddleware)
+
+
+@app.middleware("http")
+async def limit_request_body_size(request: Request, call_next):
+    """Middleware to enforce request body size limit."""
+    content_length = request.headers.get("content-length")
+    if content_length:
+        if int(content_length) > settings.max_request_body_size:
+            return JSONResponse(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                content={"detail": "Request body too large"}
+            )
+    return await call_next(request)
+
+
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    """Middleware to add security headers to responses."""
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    if settings.environment == "production":
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    return response
 
 
 @app.middleware("http")
@@ -352,6 +408,17 @@ app.include_router(markup_router)
 app.include_router(payments_router)
 app.include_router(wallet_router)
 app.include_router(wallet_admin_router)
+app.include_router(holidays_router)
+app.include_router(visa_router)
+app.include_router(activities_router)
+app.include_router(transfers_router)
+app.include_router(cms_router)
+app.include_router(settings_router)
+app.include_router(dashboard_router)
+app.include_router(dashboard_admin_router)
+app.include_router(pricing_router)
+app.include_router(pricing_admin_router)
+app.include_router(company_router)
 
 # Initialize openapi_tags if not exists
 if app.openapi_tags is None:
@@ -364,12 +431,23 @@ tag_descriptions = {
     "Bookings": "Manage flight, hotel, and bus bookings",
     "Admin": "Administrative operations and system management",
     "API Keys": "API key management for third-party integrations",
+    "Holidays": "Holiday packages, themes, destinations, enquiries and bookings",
+    "Visa": "Visa services, applications and document management",
+    "Activities": "Tours and activities, slots and bookings",
+    "Transfers": "Airport transfers and cab services",
+    "CMS": "Content management - sliders, offers, blog, static pages",
+    "Settings": "System settings, convenience fees and staff management",
+    "Dashboard": "B2C customer dashboard - bookings, amendments, queries, activity logs",
+    "Pricing": "Pricing engine - markup rules, discounts, convenience fees",
+    "Company": "Company settings - branding, bank accounts, registration, ACL",
     "Health": "Health check endpoints for monitoring",
     "Root": "API root information"
 }
 
 existing_tags = set()
-for router in [auth_router, search_router, booking_router, admin_router, api_keys_router]:
+for router in [auth_router, search_router, booking_router, admin_router, api_keys_router,
+               holidays_router, visa_router, activities_router, transfers_router, 
+               cms_router, settings_router, dashboard_router, pricing_router, company_router]:
     if hasattr(router, 'tags') and router.tags:
         for tag in router.tags:
             if isinstance(tag, str) and tag not in existing_tags:

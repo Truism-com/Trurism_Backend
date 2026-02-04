@@ -29,8 +29,11 @@ class Settings(BaseSettings):
     environment: str = "development"
     
     # CORS and Security Settings
-    cors_origins: list = ["*"]  # Comma-separated list or "*" for all
-    trusted_hosts: list = ["*"]  # Comma-separated list or "*" for all
+    cors_origins: list = ["http://localhost:3000", "http://localhost:8000"]
+    trusted_hosts: list = ["localhost", "127.0.0.1"]
+    
+    # Request Size Limits
+    max_request_body_size: int = 10 * 1024 * 1024  # 10MB
     
     # Database Settings
     database_url: str = "postgresql+asyncpg://user:password@localhost:5432/travel_booking"
@@ -70,14 +73,6 @@ class Settings(BaseSettings):
                     # For asyncpg, use ssl=require for SSL connections
                     self.database_url = f"{self.database_url}{separator}ssl=require"
         
-        # Parse CORS origins if provided as comma-separated string
-        if isinstance(self.cors_origins, str):
-            self.cors_origins = [origin.strip() for origin in self.cors_origins.split(",")] if self.cors_origins != "*" else ["*"]
-        
-        # Parse trusted hosts if provided as comma-separated string
-        if isinstance(self.trusted_hosts, str):
-            self.trusted_hosts = [host.strip() for host in self.trusted_hosts.split(",")] if self.trusted_hosts != "*" else ["*"]
-        
         return self
     
     # Redis Settings (Optional - set via environment variable)
@@ -89,6 +84,10 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 15
     refresh_token_expire_days: int = 7
+    
+    # Rate Limiting
+    rate_limit_requests: int = 100
+    rate_limit_period: int = 60
 
     # Celery / Background worker settings (Optional - set via environment variable)
     celery_broker_url: Optional[str] = None
@@ -96,7 +95,6 @@ class Settings(BaseSettings):
     
     # Security Settings
     bcrypt_rounds: int = 12
-    rate_limit_per_minute: int = 60
     
     # External API Settings - XML.Agency (Flights)
     xml_agency_base_url: str = "https://api.xmlagency.com"
@@ -150,14 +148,41 @@ class Settings(BaseSettings):
     @field_validator("jwt_secret_key")
     @classmethod
     def validate_jwt_secret(cls, v: str, info) -> str:
-        """Ensure a JWT secret is provided in non-development environments.
-
-        This avoids accidental use of hard-coded secrets in production.
-        """
-        # Access other fields through info.data
+        """Ensure a JWT secret is provided in non-development environments."""
+        import secrets
         env = info.data.get("environment", "development")
-        if env == "production" and (not v or v.strip() == ""):
-            raise ValueError("JWT_SECRET_KEY must be set in production environment")
+        if env in ("production", "staging") and (not v or v.strip() == ""):
+            raise ValueError("JWT_SECRET_KEY must be set in production/staging environment")
+        if not v or v.strip() == "":
+            return secrets.token_hex(32)
+        if len(v) < 32:
+            raise ValueError("JWT_SECRET_KEY must be at least 32 characters")
+        return v
+    
+    @field_validator("cors_origins", mode="before")
+    @classmethod
+    def validate_cors_origins(cls, v, info):
+        """Parse and validate CORS origins."""
+        if isinstance(v, str):
+            if v == "*":
+                env = info.data.get("environment", "development")
+                if env == "production":
+                    raise ValueError("CORS_ORIGINS cannot be '*' in production")
+                return ["*"]
+            return [origin.strip() for origin in v.split(",") if origin.strip()]
+        return v
+    
+    @field_validator("trusted_hosts", mode="before")
+    @classmethod
+    def validate_trusted_hosts(cls, v, info):
+        """Parse and validate trusted hosts."""
+        if isinstance(v, str):
+            if v == "*":
+                env = info.data.get("environment", "development")
+                if env == "production":
+                    raise ValueError("TRUSTED_HOSTS cannot be '*' in production")
+                return ["*"]
+            return [host.strip() for host in v.split(",") if host.strip()]
         return v
     
     model_config = {
