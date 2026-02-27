@@ -128,7 +128,7 @@ async def register_user(
     """
     auth_service = AuthService(db)
     user = await auth_service.register_user(user_data)
-    return UserProfileResponse.from_orm(user)
+    return UserProfileResponse.model_validate(user)
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -292,7 +292,7 @@ async def get_current_user_profile(current_user: User = Depends(get_current_user
     Returns:
         UserProfileResponse: User profile information
     """
-    return UserProfileResponse.from_orm(current_user)
+    return UserProfileResponse.model_validate(current_user)
 
 
 @router.put("/me", response_model=UserProfileResponse)
@@ -316,7 +316,7 @@ async def update_current_user_profile(
     """
     auth_service = AuthService(db)
     updated_user = await auth_service.update_user_profile(current_user.id, profile_data)
-    return UserProfileResponse.from_orm(updated_user)
+    return UserProfileResponse.model_validate(updated_user)
 
 
 @router.put("/me/password")

@@ -522,7 +522,7 @@ async def get_system_health(
     """
     try:
         from app.core.database import check_database_health
-        import redis
+        from app.core.redis import check_redis_health
         from app.core.config import settings
         
         # Check database health
@@ -532,9 +532,7 @@ async def get_system_health(
         redis_healthy = False
         try:
             if settings.redis_url and settings.redis_url.lower() != "none":
-                redis_client = redis.from_url(settings.redis_url, decode_responses=True)
-                redis_client.ping()
-                redis_healthy = True
+                redis_healthy = await check_redis_health(settings.redis_url)
         except Exception:
             pass
         

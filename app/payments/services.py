@@ -577,8 +577,12 @@ class WebhookService:
             bool: True if signature is valid
         """
         try:
+            if not settings.razorpay_webhook_secret:
+                logger.error("RAZORPAY_WEBHOOK_SECRET is not configured")
+                return False
+            
             expected_signature = hmac.new(
-                settings.razorpay_key_secret.encode(),
+                settings.razorpay_webhook_secret.encode(),
                 payload.encode(),
                 hashlib.sha256
             ).hexdigest()
