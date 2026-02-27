@@ -182,6 +182,7 @@ class BookingDetailResponse(BaseModel):
 class AmendmentRequestCreate(BaseModel):
     """Schema for creating an amendment request."""
     booking_id: int
+    booking_type: str = Field(..., description="Type of booking (flight, hotel, bus, package, activity, transfer)")
     amendment_type: AmendmentType
     reason: str = Field(..., min_length=10, max_length=2000)
     requested_changes: Optional[Dict[str, Any]] = None

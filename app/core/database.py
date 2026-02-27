@@ -111,12 +111,26 @@ async def init_database():
     defined models. Should be called during application startup.
     """
     async with engine.begin() as conn:
-        # Import all models to ensure they are registered
-        from app.auth.models import User, RefreshToken
-        from app.booking.models import FlightBooking, HotelBooking, BusBooking, PassengerInfo
-        from app.api_keys.models import APIKey
-        from app.tenant.models import Tenant
-        from app.markup.models import MarkupRule
+        # Import all model modules to register them with Base.metadata.
+        # Module-level import is sufficient; all classes inheriting from Base
+        # get registered when the module is executed.
+        import app.auth.models  # noqa: F401
+        import app.booking.models  # noqa: F401
+        import app.api_keys.models  # noqa: F401
+        import app.tenant.models  # noqa: F401
+        import app.markup.models  # noqa: F401
+        import app.wallet.models  # noqa: F401
+        import app.payments.models  # noqa: F401
+        import app.pricing.models  # noqa: F401
+        import app.settings.models  # noqa: F401
+        import app.dashboard.models  # noqa: F401
+        import app.holidays.models  # noqa: F401
+        import app.visa.models  # noqa: F401
+        import app.activities.models  # noqa: F401
+        import app.transfers.models  # noqa: F401
+        import app.cms.models  # noqa: F401
+        import app.hotels.models  # noqa: F401
+        import app.company.models  # noqa: F401
         
         # Create all tables
         await conn.run_sync(Base.metadata.create_all)

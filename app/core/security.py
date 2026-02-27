@@ -13,7 +13,7 @@ from typing import Optional, Dict, Any
 from jose import jwt, JWTError
 from passlib.context import CryptContext
 from fastapi import HTTPException, status
-import redis
+import redis.asyncio as aioredis
 import json
 import hashlib
 
@@ -22,11 +22,12 @@ from app.core.config import settings
 # Password hashing context
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-# Async Redis client for token blacklisting
-if settings.redis_url and settings.redis_url.lower() != "none":
-    redis_client = redis.from_url(settings.redis_url, decode_responses=True)
-else:
-    redis_client = None
+
+async def _get_redis_client():
+    """Get an async Redis client for token blacklisting."""
+    if not settings.redis_url or settings.redis_url.lower() == "none":
+        return None
+    return aioredis.from_url(settings.redis_url, decode_responses=True)
 
 
 class SecurityManager:
@@ -165,14 +166,18 @@ class SecurityManager:
             ttl = None
 
         key = f"blacklist:{token}"
-        if redis_client is None:
+        client = await _get_redis_client()
+        if client is None:
             # Redis not configured, skip blacklisting
             return
-        if ttl:
-            redis_client.setex(key, ttl, "true")
-        else:
-            # fallback: set without expiry
-            redis_client.set(key, "true")
+        try:
+            if ttl:
+                await client.setex(key, ttl, "true")
+            else:
+                # fallback: set without expiry
+                await client.set(key, "true")
+        finally:
+            await client.aclose()
     
     @staticmethod
     async def is_token_blacklisted(token: str) -> bool:
@@ -186,10 +191,15 @@ class SecurityManager:
             bool: True if token is blacklisted, False otherwise
         """
         try:
-            if redis_client is None:
+            client = await _get_redis_client()
+            if client is None:
                 # Redis not configured, fail open (do not block valid tokens)
                 return False
-            return redis_client.exists(f"blacklist:{token}") > 0
+            try:
+                result = await client.exists(f"blacklist:{token}")
+                return result > 0
+            finally:
+                await client.aclose()
         except Exception:
             # If Redis is unavailable, fail open (do not block valid tokens)
             return False

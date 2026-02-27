@@ -30,7 +30,7 @@ import time
 
 from app.core.config import settings
 from app.core.database import init_database, check_database_health
-from app.core.supabase import get_supabase
+from app.core.redis import check_redis_health
 from app.auth.api import router as auth_router
 from app.search.api import router as search_router
 from app.booking.api import router as booking_router
@@ -49,9 +49,10 @@ from app.settings.api import router as settings_router
 from app.dashboard.api import router as dashboard_router, admin_router as dashboard_admin_router
 from app.pricing.api import router as pricing_router, admin_router as pricing_admin_router
 from app.company.api import router as company_router
+from app.files.api import router as files_router
 from app.tenant.middleware import TenantMiddleware
 import os
-import redis.asyncio as redis_async
+
 
 # Configure logging
 logging.basicConfig(
@@ -312,24 +313,6 @@ async def general_exception_handler(request: Request, exc: Exception):
     )
 
 
-# Simple Supabase test endpoint
-@app.get("/test", tags=["Health"])
-async def test_supabase():
-    """
-    Test Supabase connectivity by selecting from `users` table.
-    """
-    try:
-        sb = get_supabase()
-        result = await sb.from_("users").select("*").limit(5).execute()
-        data = getattr(result, "data", None)
-        if data is None:
-            return {"count": 0, "data": []}
-        return {"count": len(data), "data": data}
-    except Exception as e:
-        logger.error(f"Unhandled exception: {e}")
-        raise HTTPException(status_code=500, detail={"detail": "Internal server error", "path": "/test"})
-
-
 # Health check endpoint
 @app.get("/health", tags=["Health"])
 async def health_check():
@@ -357,10 +340,12 @@ async def health_check():
         issues.append("database_check_skipped")
 
     # Redis health (optional)
-    redis_url = os.getenv("REDIS_URL")
-    if redis_url and redis_url.lower() != "none" and not skip_checks:
+    if settings.redis_url and settings.redis_url.lower() != "none" and not skip_checks:
         try:
-            await check_redis_health()  # if implemented elsewhere
+            redis_ok = await check_redis_health(settings.redis_url)
+            if not redis_ok:
+                degraded = True
+                issues.append("redis_connection_failed")
         except Exception as e:
             logger.error(f"Redis health check failed: {e}")
             degraded = True
@@ -419,6 +404,7 @@ app.include_router(dashboard_admin_router)
 app.include_router(pricing_router)
 app.include_router(pricing_admin_router)
 app.include_router(company_router)
+app.include_router(files_router)
 
 # Initialize openapi_tags if not exists
 if app.openapi_tags is None:

@@ -354,11 +354,11 @@ async def clear_search_cache(
         Dict: Cache clearing confirmation
     """
     try:
-        import redis
+        import redis.asyncio as aioredis
         from app.core.config import settings
         
         if settings.redis_url and settings.redis_url.lower() != "none":
-            redis_client = redis.from_url(settings.redis_url, decode_responses=True)
+            redis_client = aioredis.from_url(settings.redis_url, decode_responses=True)
         else:
             return {
                 "message": "Redis is not configured",
@@ -366,19 +366,24 @@ async def clear_search_cache(
                 "reason": cache_request.reason
             }
         
-        # Clear specific cache key or all search cache
-        if cache_request.cache_key:
-            redis_client.delete(cache_request.cache_key)
-            message = f"Cache key {cache_request.cache_key} cleared"
-        else:
-            # Clear all search cache for the specified type
-            pattern = f"search:{cache_request.search_type}:*"
-            keys = redis_client.keys(pattern)
-            if keys:
-                redis_client.delete(*keys)
-                message = f"Cleared {len(keys)} cache entries for {cache_request.search_type}"
+        try:
+            # Clear specific cache key or all search cache
+            if cache_request.cache_key:
+                await redis_client.delete(cache_request.cache_key)
+                message = f"Cache key {cache_request.cache_key} cleared"
             else:
-                message = f"No cache entries found for {cache_request.search_type}"
+                # Clear all search cache for the specified type
+                pattern = f"search:{cache_request.search_type}:*"
+                keys = []
+                async for key in redis_client.scan_iter(match=pattern):
+                    keys.append(key)
+                if keys:
+                    await redis_client.delete(*keys)
+                    message = f"Cleared {len(keys)} cache entries for {cache_request.search_type}"
+                else:
+                    message = f"No cache entries found for {cache_request.search_type}"
+        finally:
+            await redis_client.aclose()
         
         return {
             "message": message,
