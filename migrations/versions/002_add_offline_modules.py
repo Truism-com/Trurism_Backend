@@ -13,7 +13,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 
 # revision identifiers, used by Alembic.
 revision = '002_add_offline_modules'
-down_revision = '001_add_api_keys_and_salesperson_tracking'
+down_revision = '001'
 branch_labels = None
 depends_on = None
 

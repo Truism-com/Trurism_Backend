@@ -267,7 +267,7 @@ async def logout_user(
         Dict: Logout confirmation message
     """
     token = credentials.credentials
-    payload = SecurityManager.verify_token(token, "access")
+    payload = await SecurityManager.verify_token(token, "access")
     
     # Get token expiration time
     exp_timestamp = payload.get("exp")
