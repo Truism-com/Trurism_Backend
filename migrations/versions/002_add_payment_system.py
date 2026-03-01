@@ -79,20 +79,22 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["processed_by_id"], ["users.id"], ondelete="SET NULL"),
     )
     
-    # convenience_fees table
-    op.create_table(
-        "convenience_fees",
-        sa.Column("id", sa.Integer(), primary_key=True, nullable=False),
-        sa.Column("payment_method", sa.String(length=50), nullable=False, unique=True),
-        sa.Column("fee_type", fee_type_enum, nullable=False),
-        sa.Column("fee_value", sa.Float(), nullable=False),
-        sa.Column("min_fee", sa.Float(), nullable=False, server_default="0.0"),
-        sa.Column("max_fee", sa.Float(), nullable=True),
-        sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("true")),
-        sa.Column("description", sa.Text(), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=True),
-    )
+    # convenience_fees table (guarded: also created in 002_add_offline_modules)
+    conn = op.get_bind()
+    if not conn.dialect.has_table(conn, "convenience_fees"):
+        op.create_table(
+            "convenience_fees",
+            sa.Column("id", sa.Integer(), primary_key=True, nullable=False),
+            sa.Column("payment_method", sa.String(length=50), nullable=False, unique=True),
+            sa.Column("fee_type", fee_type_enum, nullable=False),
+            sa.Column("fee_value", sa.Float(), nullable=False),
+            sa.Column("min_fee", sa.Float(), nullable=False, server_default="0.0"),
+            sa.Column("max_fee", sa.Float(), nullable=True),
+            sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("true")),
+            sa.Column("description", sa.Text(), nullable=True),
+            sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+            sa.Column("updated_at", sa.DateTime(timezone=True), nullable=True),
+        )
     
     # webhook_logs table
     op.create_table(
