@@ -31,10 +31,10 @@ class PDFService:
         try:
             import weasyprint
             self._weasyprint_available = True
-        except ImportError:
+        except (ImportError, OSError) as e:
             logger.warning(
-                "weasyprint not installed. PDF generation will use fallback. "
-                "Install with: pip install weasyprint"
+                f"weasyprint not available: {e}. "
+                "PDF generation will use HTML fallback."
             )
 
     def _get_base_styles(self) -> str:
