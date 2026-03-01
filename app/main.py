@@ -181,8 +181,11 @@ app = FastAPI(
 )
 
 # Add CORS middleware
-# Use configured CORS origins, or allow all in debug mode
-cors_origins = settings.cors_origins if not settings.debug or settings.cors_origins != ["*"] else ["*"]
+# Parse CORS origins from comma-separated string
+if settings.cors_origins.strip() == "*":
+    cors_origins = ["*"]
+else:
+    cors_origins = [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
@@ -196,10 +199,11 @@ app.add_middleware(TenantMiddleware)
 
 # Add trusted host middleware for production
 # Only add if trusted_hosts is configured and not "*" in production
-if not settings.debug and settings.trusted_hosts and settings.trusted_hosts != ["*"]:
+if not settings.debug and settings.trusted_hosts.strip() and settings.trusted_hosts.strip() != "*":
+    trusted_hosts_list = [h.strip() for h in settings.trusted_hosts.split(",") if h.strip()]
     app.add_middleware(
         TrustedHostMiddleware,
-        allowed_hosts=settings.trusted_hosts
+        allowed_hosts=trusted_hosts_list
     )
 
 # Add rate limiting middleware
