@@ -28,6 +28,12 @@ services:
       # Or use external Redis service
       - key: REDIS_URL
         value: ""  # Set this manually in Render dashboard after creating Redis
+      - key: RAZORPAY_KEY_ID
+        sync: false  # Set manually in Render dashboard
+      - key: RAZORPAY_KEY_SECRET
+        sync: false  # Set manually in Render dashboard
+      - key: RAZORPAY_WEBHOOK_SECRET
+        sync: false  # Set manually from Razorpay Dashboard > Webhooks
       - key: CELERY_BROKER_URL
         sync: false  # Set manually if using Celery
       - key: CELERY_RESULT_BACKEND

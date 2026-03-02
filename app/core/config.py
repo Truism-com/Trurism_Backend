@@ -28,9 +28,9 @@ class Settings(BaseSettings):
     debug: bool = False
     environment: str = "development"
     
-    # CORS and Security Settings
-    cors_origins: list = ["http://localhost:3000", "http://localhost:8000"]
-    trusted_hosts: list = ["localhost", "127.0.0.1"]
+    # CORS and Security Settings (comma-separated strings, parsed in main.py)
+    cors_origins: str = "http://localhost:3000,http://localhost:8000"
+    trusted_hosts: str = "localhost,127.0.0.1"
     
     # Request Size Limits
     max_request_body_size: int = 10 * 1024 * 1024  # 10MB
@@ -159,31 +159,7 @@ class Settings(BaseSettings):
             raise ValueError("JWT_SECRET_KEY must be at least 32 characters")
         return v
     
-    @field_validator("cors_origins", mode="before")
-    @classmethod
-    def validate_cors_origins(cls, v, info):
-        """Parse and validate CORS origins."""
-        if isinstance(v, str):
-            if v == "*":
-                env = info.data.get("environment", "development")
-                if env == "production":
-                    raise ValueError("CORS_ORIGINS cannot be '*' in production")
-                return ["*"]
-            return [origin.strip() for origin in v.split(",") if origin.strip()]
-        return v
-    
-    @field_validator("trusted_hosts", mode="before")
-    @classmethod
-    def validate_trusted_hosts(cls, v, info):
-        """Parse and validate trusted hosts."""
-        if isinstance(v, str):
-            if v == "*":
-                env = info.data.get("environment", "development")
-                if env == "production":
-                    raise ValueError("TRUSTED_HOSTS cannot be '*' in production")
-                return ["*"]
-            return [host.strip() for host in v.split(",") if host.strip()]
-        return v
+    # Note: cors_origins and trusted_hosts are parsed in main.py
     
     model_config = {
         "env_file": ".env",

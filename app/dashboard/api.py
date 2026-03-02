@@ -257,7 +257,7 @@ async def create_amendment_request(
     booking = await service.get_booking_detail(
         user_id=current_user.id,
         booking_id=data.booking_id,
-        booking_type="flight"  # Determine booking type
+        booking_type=data.booking_type
     )
     if not booking:
         raise HTTPException(status_code=404, detail="Booking not found")
@@ -271,7 +271,7 @@ async def create_amendment_request(
     amendment = await service.create_amendment_request(
         user_id=current_user.id,
         booking_id=data.booking_id,
-        booking_type="flight",  # Get from booking
+        booking_type=data.booking_type,
         amendment_type=data.amendment_type.value,
         reason=data.reason,
         requested_changes=data.requested_changes,

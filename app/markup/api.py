@@ -76,7 +76,7 @@ async def create_markup_rule(
     """
     markup_service = MarkupService(db)
     rule = await markup_service.create_markup_rule(rule_data, current_admin.id)
-    return MarkupRuleResponse.from_orm(rule)
+    return MarkupRuleResponse.model_validate(rule)
 
 
 @router.get("/admin/markups", response_model=MarkupRuleListResponse)
@@ -121,7 +121,7 @@ async def list_markup_rules(
     )
     
     return MarkupRuleListResponse(
-        rules=[MarkupRuleResponse.from_orm(r) for r in rules],
+        rules=[MarkupRuleResponse.model_validate(r) for r in rules],
         total=total,
         page=page,
         size=size
@@ -156,7 +156,7 @@ async def get_markup_rule(
             detail="Markup rule not found"
         )
     
-    return MarkupRuleResponse.from_orm(rule)
+    return MarkupRuleResponse.model_validate(rule)
 
 
 @router.put("/admin/markups/{rule_id}", response_model=MarkupRuleResponse)
@@ -182,7 +182,7 @@ async def update_markup_rule(
     """
     markup_service = MarkupService(db)
     rule = await markup_service.update_markup_rule(rule_id, update_data)
-    return MarkupRuleResponse.from_orm(rule)
+    return MarkupRuleResponse.model_validate(rule)
 
 
 @router.delete("/admin/markups/{rule_id}", status_code=status.HTTP_204_NO_CONTENT)

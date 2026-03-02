@@ -73,7 +73,7 @@ async def create_flight_booking(
             current_user, booking_request, flight_data, created_by_user=current_user
         )
         
-        return FlightBookingResponse.from_orm(booking)
+        return FlightBookingResponse.model_validate(booking)
         
     except Exception as e:
         raise HTTPException(
@@ -123,7 +123,7 @@ async def create_hotel_booking(
             current_user, booking_request, hotel_data, created_by_user=current_user
         )
         
-        return HotelBookingResponse.from_orm(booking)
+        return HotelBookingResponse.model_validate(booking)
         
     except Exception as e:
         raise HTTPException(
@@ -175,7 +175,7 @@ async def create_bus_booking(
             current_user, booking_request, bus_data, created_by_user=current_user
         )
         
-        return BusBookingResponse.from_orm(booking)
+        return BusBookingResponse.model_validate(booking)
         
     except Exception as e:
         raise HTTPException(

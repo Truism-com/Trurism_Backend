@@ -102,7 +102,7 @@ async def create_tenant(
     """
     tenant_service = TenantService(db)
     tenant = await tenant_service.create_tenant(tenant_data)
-    return TenantResponse.from_orm(tenant)
+    return TenantResponse.model_validate(tenant)
 
 
 @router.get("/admin/tenants", response_model=TenantListResponse)
@@ -138,7 +138,7 @@ async def list_tenants(
     )
     
     return TenantListResponse(
-        tenants=[TenantResponse.from_orm(t) for t in tenants],
+        tenants=[TenantResponse.model_validate(t) for t in tenants],
         total=total,
         page=page,
         size=size
@@ -173,7 +173,7 @@ async def get_tenant(
             detail="Tenant not found"
         )
     
-    return TenantResponse.from_orm(tenant)
+    return TenantResponse.model_validate(tenant)
 
 
 @router.put("/admin/config/branding", response_model=TenantResponse)
@@ -212,7 +212,7 @@ async def update_branding(
         branding_data
     )
     
-    return TenantResponse.from_orm(updated_tenant)
+    return TenantResponse.model_validate(updated_tenant)
 
 
 @router.put("/admin/tenants/{tenant_id}/config", response_model=TenantResponse)
@@ -238,7 +238,7 @@ async def update_tenant_config(
     """
     tenant_service = TenantService(db)
     updated_tenant = await tenant_service.update_config(tenant_id, config_data)
-    return TenantResponse.from_orm(updated_tenant)
+    return TenantResponse.model_validate(updated_tenant)
 
 
 @router.delete("/admin/tenants/{tenant_id}", status_code=status.HTTP_204_NO_CONTENT)
