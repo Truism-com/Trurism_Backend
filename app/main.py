@@ -95,34 +95,29 @@ async def lifespan(app: FastAPI):
         if os.getenv("SKIP_DB_INIT", "false").lower() not in ("1", "true", "yes"):
             db_healthy = await check_database_health()
             if not db_healthy:
-                logger.error("Database health check failed")
-                raise Exception("Database connection failed")
-            logger.info("Database health check passed")
+                logger.error("Database health check failed - endpoints requiring DB will not work")
+            else:
+                logger.info("Database health check passed")
         else:
             logger.info("Skipping database health check due to SKIP_DB_INIT env var")
-        # Check Redis (if configured) - Non-blocking, optional service
-        try:
-            if settings.redis_url and settings.redis_url.lower() != "none" and not settings.redis_url.startswith("redis://localhost"):
-                # use a short-lived client to ping Redis
-                client = redis_async.from_url(settings.redis_url, encoding="utf-8", decode_responses=True)
-                pong = await client.ping()
-                if pong:
-                    logger.info("Redis ping successful")
-                await client.close()
-            else:
-                logger.info("Redis not configured or using localhost - skipping health check")
-        except Exception as re:
-            logger.warning(f"Redis health check failed (non-critical): {re}")
-        
-        # TODO: Initialize Redis connection
-        # TODO: Initialize external API clients
-        # TODO: Start background tasks (Celery workers)
-        
-        logger.info("Travel Booking Platform API started successfully")
-        
     except Exception as e:
-        logger.error(f"Failed to start application: {e}")
-        raise
+        logger.error(f"Database initialization failed (non-fatal): {e}")
+        logger.error("API will start but database-dependent endpoints will not work")
+    
+    # Check Redis (if configured) - Non-blocking, optional service
+    try:
+        if settings.redis_url and settings.redis_url.lower() != "none" and not settings.redis_url.startswith("redis://localhost"):
+            client = redis_async.from_url(settings.redis_url, encoding="utf-8", decode_responses=True)
+            pong = await client.ping()
+            if pong:
+                logger.info("Redis ping successful")
+            await client.close()
+        else:
+            logger.info("Redis not configured or using localhost - skipping health check")
+    except Exception as re:
+        logger.warning(f"Redis health check failed (non-critical): {re}")
+    
+    logger.info("Travel Booking Platform API started successfully")
     
     yield
     

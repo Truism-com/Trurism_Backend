@@ -714,3 +714,7 @@ class AvailabilityResponse(BaseModel):
     check_out: date
     nights: int
     rooms_available: List[RoomAvailability]
+
+
+# Rebuild models with forward references
+HotelDetail.model_rebuild()
