@@ -17,7 +17,7 @@ from sqlalchemy.dialects import postgresql
 
 # revision identifiers
 revision = '003_add_wallet_system'
-down_revision = '002_add_payment_system'
+down_revision = '002'
 branch_labels = None
 depends_on = None
 
