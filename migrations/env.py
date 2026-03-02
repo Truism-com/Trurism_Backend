@@ -17,13 +17,25 @@ from dotenv import load_dotenv
 # Load environment variables from .env file
 load_dotenv()
 
-# Import your models here
+# Import all model modules to register them with Base.metadata for autogenerate
 from app.core.database import Base
-from app.auth.models import User
-from app.booking.models import (
-    FlightBooking, HotelBooking, BusBooking, PassengerInfo,
-    FlightBookingPassenger
-)
+import app.auth.models  # noqa: F401
+import app.booking.models  # noqa: F401
+import app.api_keys.models  # noqa: F401
+import app.tenant.models  # noqa: F401
+import app.markup.models  # noqa: F401
+import app.wallet.models  # noqa: F401
+import app.payments.models  # noqa: F401
+import app.pricing.models  # noqa: F401
+import app.settings.models  # noqa: F401
+import app.dashboard.models  # noqa: F401
+import app.holidays.models  # noqa: F401
+import app.visa.models  # noqa: F401
+import app.activities.models  # noqa: F401
+import app.transfers.models  # noqa: F401
+import app.cms.models  # noqa: F401
+import app.hotels.models  # noqa: F401
+import app.company.models  # noqa: F401
 
 # Import settings to get database URL
 from app.core.config import settings

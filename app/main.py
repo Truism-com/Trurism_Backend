@@ -30,7 +30,7 @@ import time
 
 from app.core.config import settings
 from app.core.database import init_database, check_database_health
-from app.core.supabase import get_supabase
+from app.core.redis import check_redis_health
 from app.auth.api import router as auth_router
 from app.search.api import router as search_router
 from app.booking.api import router as booking_router
@@ -49,9 +49,10 @@ from app.settings.api import router as settings_router
 from app.dashboard.api import router as dashboard_router, admin_router as dashboard_admin_router
 from app.pricing.api import router as pricing_router, admin_router as pricing_admin_router
 from app.company.api import router as company_router
+from app.files.api import router as files_router
 from app.tenant.middleware import TenantMiddleware
 import os
-import redis.asyncio as redis_async
+
 
 # Configure logging
 logging.basicConfig(
@@ -94,34 +95,29 @@ async def lifespan(app: FastAPI):
         if os.getenv("SKIP_DB_INIT", "false").lower() not in ("1", "true", "yes"):
             db_healthy = await check_database_health()
             if not db_healthy:
-                logger.error("Database health check failed")
-                raise Exception("Database connection failed")
-            logger.info("Database health check passed")
+                logger.error("Database health check failed - endpoints requiring DB will not work")
+            else:
+                logger.info("Database health check passed")
         else:
             logger.info("Skipping database health check due to SKIP_DB_INIT env var")
-        # Check Redis (if configured) - Non-blocking, optional service
-        try:
-            if settings.redis_url and settings.redis_url.lower() != "none" and not settings.redis_url.startswith("redis://localhost"):
-                # use a short-lived client to ping Redis
-                client = redis_async.from_url(settings.redis_url, encoding="utf-8", decode_responses=True)
-                pong = await client.ping()
-                if pong:
-                    logger.info("Redis ping successful")
-                await client.close()
-            else:
-                logger.info("Redis not configured or using localhost - skipping health check")
-        except Exception as re:
-            logger.warning(f"Redis health check failed (non-critical): {re}")
-        
-        # TODO: Initialize Redis connection
-        # TODO: Initialize external API clients
-        # TODO: Start background tasks (Celery workers)
-        
-        logger.info("Travel Booking Platform API started successfully")
-        
     except Exception as e:
-        logger.error(f"Failed to start application: {e}")
-        raise
+        logger.error(f"Database initialization failed (non-fatal): {e}")
+        logger.error("API will start but database-dependent endpoints will not work")
+    
+    # Check Redis (if configured) - Non-blocking, optional service
+    try:
+        if settings.redis_url and settings.redis_url.lower() != "none" and not settings.redis_url.startswith("redis://localhost"):
+            client = redis_async.from_url(settings.redis_url, encoding="utf-8", decode_responses=True)
+            pong = await client.ping()
+            if pong:
+                logger.info("Redis ping successful")
+            await client.close()
+        else:
+            logger.info("Redis not configured or using localhost - skipping health check")
+    except Exception as re:
+        logger.warning(f"Redis health check failed (non-critical): {re}")
+    
+    logger.info("Travel Booking Platform API started successfully")
     
     yield
     
@@ -180,8 +176,11 @@ app = FastAPI(
 )
 
 # Add CORS middleware
-# Use configured CORS origins, or allow all in debug mode
-cors_origins = settings.cors_origins if not settings.debug or settings.cors_origins != ["*"] else ["*"]
+# Parse CORS origins from comma-separated string
+if settings.cors_origins.strip() == "*":
+    cors_origins = ["*"]
+else:
+    cors_origins = [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
@@ -195,10 +194,11 @@ app.add_middleware(TenantMiddleware)
 
 # Add trusted host middleware for production
 # Only add if trusted_hosts is configured and not "*" in production
-if not settings.debug and settings.trusted_hosts and settings.trusted_hosts != ["*"]:
+if not settings.debug and settings.trusted_hosts.strip() and settings.trusted_hosts.strip() != "*":
+    trusted_hosts_list = [h.strip() for h in settings.trusted_hosts.split(",") if h.strip()]
     app.add_middleware(
         TrustedHostMiddleware,
-        allowed_hosts=settings.trusted_hosts
+        allowed_hosts=trusted_hosts_list
     )
 
 # Add rate limiting middleware
@@ -312,24 +312,6 @@ async def general_exception_handler(request: Request, exc: Exception):
     )
 
 
-# Simple Supabase test endpoint
-@app.get("/test", tags=["Health"])
-async def test_supabase():
-    """
-    Test Supabase connectivity by selecting from `users` table.
-    """
-    try:
-        sb = get_supabase()
-        result = await sb.from_("users").select("*").limit(5).execute()
-        data = getattr(result, "data", None)
-        if data is None:
-            return {"count": 0, "data": []}
-        return {"count": len(data), "data": data}
-    except Exception as e:
-        logger.error(f"Unhandled exception: {e}")
-        raise HTTPException(status_code=500, detail={"detail": "Internal server error", "path": "/test"})
-
-
 # Health check endpoint
 @app.get("/health", tags=["Health"])
 async def health_check():
@@ -357,10 +339,12 @@ async def health_check():
         issues.append("database_check_skipped")
 
     # Redis health (optional)
-    redis_url = os.getenv("REDIS_URL")
-    if redis_url and redis_url.lower() != "none" and not skip_checks:
+    if settings.redis_url and settings.redis_url.lower() != "none" and not skip_checks:
         try:
-            await check_redis_health()  # if implemented elsewhere
+            redis_ok = await check_redis_health(settings.redis_url)
+            if not redis_ok:
+                degraded = True
+                issues.append("redis_connection_failed")
         except Exception as e:
             logger.error(f"Redis health check failed: {e}")
             degraded = True
@@ -419,6 +403,7 @@ app.include_router(dashboard_admin_router)
 app.include_router(pricing_router)
 app.include_router(pricing_admin_router)
 app.include_router(company_router)
+app.include_router(files_router)
 
 # Initialize openapi_tags if not exists
 if app.openapi_tags is None:

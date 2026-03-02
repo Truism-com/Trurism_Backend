@@ -127,7 +127,7 @@ async def create_api_key(
             current_user.id, key_data
         )
         
-        response = APIKeyResponse.from_orm(api_key)
+        response = APIKeyResponse.model_validate(api_key)
         response.key = plain_key  # Only shown once
         
         return response
@@ -161,7 +161,7 @@ async def list_api_keys(
         api_key_service = APIKeyService(db)
         api_keys = await api_key_service.get_user_api_keys(current_user.id)
         
-        return [APIKeyListResponse.from_orm(key) for key in api_keys]
+        return [APIKeyListResponse.model_validate(key) for key in api_keys]
         
     except Exception as e:
         raise HTTPException(
@@ -197,7 +197,7 @@ async def get_api_key(
                 detail="API key not found"
             )
         
-        return APIKeyListResponse.from_orm(api_key)
+        return APIKeyListResponse.model_validate(api_key)
         
     except HTTPException:
         raise
@@ -239,7 +239,7 @@ async def update_api_key(
                 detail="API key not found"
             )
         
-        return APIKeyListResponse.from_orm(api_key)
+        return APIKeyListResponse.model_validate(api_key)
         
     except HTTPException:
         raise
