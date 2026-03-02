@@ -142,6 +142,11 @@ def run_migrations_online() -> None:
     """Run migrations in 'online' mode."""
     url = get_url()
     
+    # Build connect_args for pgBouncer compatibility
+    migration_connect_args = {}
+    if "pooler.supabase.com" in url or "pgbouncer" in url.lower():
+        migration_connect_args["statement_cache_size"] = 0
+    
     # Choose engine type based on driver: psycopg -> sync, asyncpg -> async
     is_psycopg = url.startswith("postgresql+psycopg://")
     if is_psycopg:
@@ -158,6 +163,7 @@ def run_migrations_online() -> None:
                 prefix="sqlalchemy.",
                 poolclass=pool.NullPool,
                 future=True,
+                connect_args=migration_connect_args,
             )
         )
 
