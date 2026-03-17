@@ -51,7 +51,6 @@ from app.pricing.api import router as pricing_router, admin_router as pricing_ad
 from app.company.api import router as company_router
 from app.files.api import router as files_router
 from app.tenant.middleware import TenantMiddleware
-import os
 
 
 # Configure logging
@@ -107,11 +106,11 @@ async def lifespan(app: FastAPI):
     # Check Redis (if configured) - Non-blocking, optional service
     try:
         if settings.redis_url and settings.redis_url.lower() != "none" and not settings.redis_url.startswith("redis://localhost"):
-            client = redis_async.from_url(settings.redis_url, encoding="utf-8", decode_responses=True)
-            pong = await client.ping()
-            if pong:
+            redis_ok = await check_redis_health(settings.redis_url)
+            if redis_ok:
                 logger.info("Redis ping successful")
-            await client.close()
+            else:
+                logger.warning("Redis health check returned False (non-critical)")
         else:
             logger.info("Redis not configured or using localhost - skipping health check")
     except Exception as re:
@@ -234,43 +233,18 @@ async def add_security_headers(request: Request, call_next):
 
 
 @app.middleware("http")
-async def add_process_time_header(request: Request, call_next):
-    """
-    Middleware to add processing time to response headers.
-    
-    This middleware measures request processing time and adds it
-    to the response headers for monitoring and debugging.
-    """
+async def log_requests(request: Request, call_next):
+    """Log requests and attach X-Process-Time header in one pass."""
     start_time = time.time()
+    logger.info(f"Request: {request.method} {request.url.path}")
     response = await call_next(request)
     process_time = time.time() - start_time
     response.headers["X-Process-Time"] = str(process_time)
-    return response
-
-
-@app.middleware("http")
-async def log_requests(request: Request, call_next):
-    """
-    Middleware to log HTTP requests.
-    
-    This middleware logs all incoming requests with method, path,
-    and response status for monitoring and debugging.
-    """
-    start_time = time.time()
-    
-    # Log request
-    logger.info(f"Request: {request.method} {request.url.path}")
-    
-    response = await call_next(request)
-    
-    # Log response
-    process_time = time.time() - start_time
     logger.info(
         f"Response: {request.method} {request.url.path} - "
         f"Status: {response.status_code} - "
         f"Time: {process_time:.3f}s"
     )
-    
     return response
 
 
