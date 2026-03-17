@@ -65,7 +65,7 @@ class Settings(BaseSettings):
                 # Check if this is a remote database that requires SSL
                 is_local = "localhost" in self.database_url or "127.0.0.1" in self.database_url
                 is_production = self.environment in ["production", "staging"]
-                is_remote_host = any(host in self.database_url for host in ["render.com", ".onrender.com", ".amazonaws.com", "cloud", "managed", ".supabase.co"])
+                is_remote_host = any(host in self.database_url for host in ["render.com", ".onrender.com", ".amazonaws.com", "cloud", "managed", ".supabase.co", ".azure.com", ".postgres.database.azure.com"])
                 
                 # Only add SSL for remote/production databases, not local development
                 if (is_production or is_remote_host) and not is_local:

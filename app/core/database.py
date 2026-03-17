@@ -16,15 +16,16 @@ from typing import AsyncGenerator
 
 from app.core.config import settings
 
-# Connection arguments for asyncpg SSL support
-# SSL is typically required for managed databases like Render PostgreSQL
-# The URL already includes ssl=require if needed, but we also set it in connect_args
-# for explicit SSL configuration with asyncpg
+# Connection arguments for asyncpg
 connect_args = {}
+
+# SSL support for managed databases
 if "ssl=require" in settings.database_url:
-    # For asyncpg, use ssl='require' for SSL connections
-    # asyncpg accepts ssl as a string ('require', 'allow', 'prefer', etc.) or boolean
     connect_args["ssl"] = "require"
+
+# Disable prepared statement caching for pgBouncer (Supabase transaction pooler)
+if "pooler.supabase.com" in settings.database_url or "pgbouncer" in settings.database_url.lower():
+    connect_args["statement_cache_size"] = 0
 
 # Database engine for async operations
 engine = create_async_engine(
@@ -33,7 +34,7 @@ engine = create_async_engine(
     max_overflow=settings.database_max_overflow,
     echo=settings.debug,  # Log SQL queries in debug mode
     future=True,
-    connect_args=connect_args if connect_args else {}
+    connect_args=connect_args
 )
 
 # Async session factory
