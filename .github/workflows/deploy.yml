@@ -2,7 +2,7 @@ name: Deploy Trurism API
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "master" ]
   workflow_dispatch:
 
 jobs:
