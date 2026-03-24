@@ -15,10 +15,9 @@ from app.booking.models import (
     BookingStatus, PaymentStatus, PaymentMethod, PassengerType
 )
 from app.booking.services import (
-    BookingService, FlightBookingService, HotelBookingService, BusBookingService
+    BaseBookingService, FlightBookingService, HotelBookingService, BusBookingService,
+    FlightBookingError, BusBookingError
 )
-from app.booking.flight_service import EnhancedFlightBookingService, FlightBookingError
-from app.booking.bus_service import BusBookingService as EnhancedBusBookingService, BusBookingError
 from app.booking.payment_processor import (
     BookingPaymentProcessor, PaymentMode, PaymentProcessingError
 )
@@ -35,12 +34,10 @@ __all__ = [
     "PaymentMethod",
     "PassengerType",
     # Services
-    "BookingService",
+    "BaseBookingService",
     "FlightBookingService",
     "HotelBookingService",
     "BusBookingService",
-    "EnhancedFlightBookingService",
-    "EnhancedBusBookingService",
     # Payment Processor
     "BookingPaymentProcessor",
     "PaymentMode",

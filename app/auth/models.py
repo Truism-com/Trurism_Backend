@@ -15,6 +15,7 @@ import enum
 from datetime import datetime
 
 from app.core.database import Base
+from app.core.mixins import TenantMixin
 
 
 class UserRole(str, enum.Enum):
@@ -45,7 +46,7 @@ class AgentApprovalStatus(str, enum.Enum):
     SUSPENDED = "suspended"
 
 
-class User(Base):
+class User(Base, TenantMixin):
     """
     User model for authentication and authorization.
     
@@ -108,7 +109,7 @@ class User(Base):
         return self.is_agent and self.approval_status == AgentApprovalStatus.APPROVED
 
 
-class RefreshToken(Base):
+class RefreshToken(Base, TenantMixin):
     """
     Refresh token model to persist issued refresh tokens.
     """

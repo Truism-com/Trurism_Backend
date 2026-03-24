@@ -9,7 +9,7 @@ This module defines FastAPI endpoints for booking operations:
 - Booking cancellation and refunds
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
 
@@ -33,6 +33,7 @@ router = APIRouter(prefix="/bookings", tags=["Bookings"])
 async def create_flight_booking(
     booking_request: FlightBookingRequest,
     current_user: User = Depends(get_current_user),
+    request: Request = None,
     db: AsyncSession = Depends(get_database_session)
 ):
     """
@@ -67,7 +68,8 @@ async def create_flight_booking(
             "travel_class": "economy"
         }
         
-        booking_service = FlightBookingService(db)
+        tenant_id = getattr(request.state, "tenant_id", None)
+        booking_service = FlightBookingService(db, tenant_id=tenant_id)
         # Track who created this booking (for B2B agent tracking)
         booking = await booking_service.create_flight_booking(
             current_user, booking_request, flight_data, created_by_user=current_user
@@ -86,6 +88,7 @@ async def create_flight_booking(
 async def create_hotel_booking(
     booking_request: HotelBookingRequest,
     current_user: User = Depends(get_current_user),
+    request: Request = None,
     db: AsyncSession = Depends(get_database_session)
 ):
     """
@@ -117,7 +120,8 @@ async def create_hotel_booking(
             "cancellation_policy": "Free cancellation until 24 hours before check-in"
         }
         
-        booking_service = HotelBookingService(db)
+        tenant_id = getattr(request.state, "tenant_id", None)
+        booking_service = HotelBookingService(db, tenant_id=tenant_id)
         # Track who created this booking (for B2B agent tracking)
         booking = await booking_service.create_hotel_booking(
             current_user, booking_request, hotel_data, created_by_user=current_user
@@ -136,6 +140,7 @@ async def create_hotel_booking(
 async def create_bus_booking(
     booking_request: BusBookingRequest,
     current_user: User = Depends(get_current_user),
+    request: Request = None,
     db: AsyncSession = Depends(get_database_session)
 ):
     """
@@ -169,7 +174,8 @@ async def create_bus_booking(
             "arrival_time": "2025-01-16T04:00:00"
         }
         
-        booking_service = BusBookingService(db)
+        tenant_id = getattr(request.state, "tenant_id", None)
+        booking_service = BusBookingService(db, tenant_id=tenant_id)
         # Track who created this booking (for B2B agent tracking)
         booking = await booking_service.create_bus_booking(
             current_user, booking_request, bus_data, created_by_user=current_user
@@ -190,6 +196,7 @@ async def get_user_bookings(
     size: int = Query(10, ge=1, le=50, description="Number of bookings per page"),
     status: Optional[BookingStatus] = Query(None, description="Filter by booking status"),
     current_user: User = Depends(get_current_user),
+    request: Request = None,
     db: AsyncSession = Depends(get_database_session)
 ):
     """
@@ -211,10 +218,11 @@ async def get_user_bookings(
     try:
         skip = (page - 1) * size
         
+        tenant_id = getattr(request.state, "tenant_id", None)
         # Get bookings from all services
-        flight_service = FlightBookingService(db)
-        hotel_service = HotelBookingService(db)
-        bus_service = BusBookingService(db)
+        flight_service = FlightBookingService(db, tenant_id=tenant_id)
+        hotel_service = HotelBookingService(db, tenant_id=tenant_id)
+        bus_service = BusBookingService(db, tenant_id=tenant_id)
         
         # Get bookings from each service
         flight_bookings = await flight_service.get_user_flight_bookings(
@@ -299,6 +307,7 @@ async def get_user_bookings(
 async def get_booking_details(
     booking_id: int,
     current_user: User = Depends(get_current_user),
+    request: Request = None,
     db: AsyncSession = Depends(get_database_session)
 ):
     """
@@ -319,10 +328,11 @@ async def get_booking_details(
         HTTPException: If booking not found or doesn't belong to user
     """
     try:
+        tenant_id = getattr(request.state, "tenant_id", None)
         # Try to find booking in each service
-        flight_service = FlightBookingService(db)
-        hotel_service = HotelBookingService(db)
-        bus_service = BusBookingService(db)
+        flight_service = FlightBookingService(db, tenant_id=tenant_id)
+        hotel_service = HotelBookingService(db, tenant_id=tenant_id)
+        bus_service = BusBookingService(db, tenant_id=tenant_id)
         
         # Check flight bookings
         flight_booking = await flight_service.get_flight_booking(booking_id, current_user.id)
@@ -432,6 +442,7 @@ async def cancel_booking(
     booking_id: int,
     cancel_request: CancelBookingRequest,
     current_user: User = Depends(get_current_user),
+    request: Request = None,
     db: AsyncSession = Depends(get_database_session)
 ):
     """
@@ -453,10 +464,11 @@ async def cancel_booking(
         HTTPException: If booking not found or cannot be cancelled
     """
     try:
+        tenant_id = getattr(request.state, "tenant_id", None)
         # Try to cancel booking in each service
-        flight_service = FlightBookingService(db)
-        hotel_service = HotelBookingService(db)
-        bus_service = BusBookingService(db)
+        flight_service = FlightBookingService(db, tenant_id=tenant_id)
+        hotel_service = HotelBookingService(db, tenant_id=tenant_id)
+        bus_service = BusBookingService(db, tenant_id=tenant_id)
         
         # Check flight bookings
         flight_booking = await flight_service.get_flight_booking(booking_id, current_user.id)
