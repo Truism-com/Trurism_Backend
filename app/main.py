@@ -275,13 +275,16 @@ async def general_exception_handler(request: Request, exc: Exception):
     This handler catches unhandled exceptions and returns
     appropriate error responses while logging the details.
     """
-    logger.error(f"Unhandled exception: {exc}", exc_info=True)
+    logger.error(f"Unhandled exception on {request.url.path}: {exc}", exc_info=True)
     
+    # In production, we should probably be more careful,
+    # but for debugging this 500, we need the error message.
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={
-            "detail": "Internal server error",
-            "path": request.url.path
+            "detail": f"Internal server error: {str(exc)}",
+            "path": request.url.path,
+            "error_type": type(exc).__name__
         }
     )
 
@@ -353,6 +356,24 @@ async def root():
         "redoc_url": "/redoc" if settings.debug else None,
         "health_url": "/health"
     }
+
+
+@app.post("/admin/init-db", tags=["Admin"], include_in_schema=True)
+async def manual_init_db():
+    """
+    Manually trigger database initialization.
+    DANGEROUS: Use only for debugging table creation.
+    """
+    try:
+        from app.core.database import init_database
+        await init_database()
+        return {"message": "Database initialization triggered successfully"}
+    except Exception as e:
+        logger.error(f"Manual DB init failed: {e}", exc_info=True)
+        return JSONResponse(
+            status_code=500,
+            content={"error": str(e), "type": type(e).__name__}
+        )
 
 
 # Include module routers
