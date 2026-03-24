@@ -8,7 +8,7 @@ This module defines FastAPI endpoints for search operations:
 - Search result caching and optimization
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
 
@@ -34,31 +34,11 @@ async def search_flights(
     infants: int = Query(0, ge=0, le=9, description="Number of infant passengers"),
     travel_class: str = Query("economy", description="Travel class (economy, business, first)"),
     max_results: int = Query(50, ge=1, le=100, description="Maximum search results"),
+    request: Request = None,
     db: AsyncSession = Depends(get_database_session)
 ):
     """
     Search for available flights.
-    
-    This endpoint searches for flights based on origin, destination, dates,
-    passenger count, and travel preferences. Results are cached for performance.
-    
-    Args:
-        origin: Origin airport IATA code (e.g., "DEL")
-        destination: Destination airport IATA code (e.g., "BOM")
-        depart_date: Departure date in YYYY-MM-DD format
-        return_date: Optional return date for round trip
-        adults: Number of adult passengers (1-9)
-        children: Number of child passengers (0-9)
-        infants: Number of infant passengers (0-9)
-        travel_class: Travel class preference
-        max_results: Maximum number of results to return
-        db: Database session
-        
-    Returns:
-        SearchResponse: Flight search results with metadata
-        
-    Raises:
-        HTTPException: If search parameters are invalid
     """
     try:
         from datetime import datetime
@@ -83,7 +63,8 @@ async def search_flights(
         )
         
         # Perform search
-        flight_service = FlightSearchService(db)
+        tenant_id = getattr(request.state, "tenant_id", None)
+        flight_service = FlightSearchService(db, tenant_id=tenant_id)
         results = await flight_service.search_flights(search_request)
         
         return results
@@ -103,6 +84,7 @@ async def search_flights(
 @router.post("/flights", response_model=SearchResponse)
 async def search_flights_post(
     search_request: FlightSearchRequest,
+    request: Request = None,
     db: AsyncSession = Depends(get_database_session)
 ):
     """
@@ -119,7 +101,8 @@ async def search_flights_post(
         SearchResponse: Flight search results with metadata
     """
     try:
-        flight_service = FlightSearchService(db)
+        tenant_id = getattr(request.state, "tenant_id", None)
+        flight_service = FlightSearchService(db, tenant_id=tenant_id)
         results = await flight_service.search_flights(search_request)
         return results
     except Exception as e:
@@ -142,30 +125,11 @@ async def search_hotels(
     rating: Optional[float] = Query(None, ge=1, le=5, description="Minimum hotel rating"),
     amenities: Optional[str] = Query(None, description="Comma-separated amenities"),
     max_results: int = Query(50, ge=1, le=100, description="Maximum search results"),
+    request: Request = None,
     db: AsyncSession = Depends(get_database_session)
 ):
     """
     Search for available hotels.
-    
-    This endpoint searches for hotels based on location, dates, room requirements,
-    and preferences. Supports filtering by price range, rating, and amenities.
-    
-    Args:
-        location: Hotel location or city name
-        checkin: Check-in date in YYYY-MM-DD format
-        checkout: Check-out date in YYYY-MM-DD format
-        rooms: Number of rooms required
-        adults: Number of adult guests
-        children: Number of child guests
-        min_price: Minimum price per night filter
-        max_price: Maximum price per night filter
-        rating: Minimum hotel rating filter
-        amenities: Comma-separated list of required amenities
-        max_results: Maximum number of results to return
-        db: Database session
-        
-    Returns:
-        SearchResponse: Hotel search results with metadata
     """
     try:
         from datetime import datetime
@@ -195,7 +159,8 @@ async def search_hotels(
         )
         
         # Perform search
-        hotel_service = HotelSearchService(db)
+        tenant_id = getattr(request.state, "tenant_id", None)
+        hotel_service = HotelSearchService(db, tenant_id=tenant_id)
         results = await hotel_service.search_hotels(search_request)
         
         return results
@@ -215,6 +180,7 @@ async def search_hotels(
 @router.post("/hotels", response_model=SearchResponse)
 async def search_hotels_post(
     search_request: HotelSearchRequest,
+    request: Request = None,
     db: AsyncSession = Depends(get_database_session)
 ):
     """
@@ -231,7 +197,8 @@ async def search_hotels_post(
         SearchResponse: Hotel search results with metadata
     """
     try:
-        hotel_service = HotelSearchService(db)
+        tenant_id = getattr(request.state, "tenant_id", None)
+        hotel_service = HotelSearchService(db, tenant_id=tenant_id)
         results = await hotel_service.search_hotels(search_request)
         return results
     except Exception as e:
@@ -249,25 +216,11 @@ async def search_buses(
     passengers: int = Query(..., ge=1, le=9, description="Number of passengers"),
     return_date: Optional[str] = Query(None, description="Return date (YYYY-MM-DD)"),
     max_results: int = Query(50, ge=1, le=100, description="Maximum search results"),
+    request: Request = None,
     db: AsyncSession = Depends(get_database_session)
 ):
     """
     Search for available buses.
-    
-    This endpoint searches for inter-city bus options based on origin,
-    destination, travel date, and passenger count.
-    
-    Args:
-        origin: Origin city or location
-        destination: Destination city or location
-        travel_date: Travel date in YYYY-MM-DD format
-        passengers: Number of passengers
-        return_date: Optional return date for round trip
-        max_results: Maximum number of results to return
-        db: Database session
-        
-    Returns:
-        SearchResponse: Bus search results with metadata
     """
     try:
         from datetime import datetime
@@ -289,7 +242,8 @@ async def search_buses(
         )
         
         # Perform search
-        bus_service = BusSearchService(db)
+        tenant_id = getattr(request.state, "tenant_id", None)
+        bus_service = BusSearchService(db, tenant_id=tenant_id)
         results = await bus_service.search_buses(search_request)
         
         return results
@@ -309,6 +263,7 @@ async def search_buses(
 @router.post("/buses", response_model=SearchResponse)
 async def search_buses_post(
     search_request: BusSearchRequest,
+    request: Request = None,
     db: AsyncSession = Depends(get_database_session)
 ):
     """
@@ -325,7 +280,8 @@ async def search_buses_post(
         SearchResponse: Bus search results with metadata
     """
     try:
-        bus_service = BusSearchService(db)
+        tenant_id = getattr(request.state, "tenant_id", None)
+        bus_service = BusSearchService(db, tenant_id=tenant_id)
         results = await bus_service.search_buses(search_request)
         return results
     except Exception as e:

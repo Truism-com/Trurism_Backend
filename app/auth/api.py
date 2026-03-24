@@ -8,7 +8,7 @@ This module defines FastAPI endpoints for authentication operations:
 - Password change functionality
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Dict, Any
@@ -108,6 +108,7 @@ async def get_current_admin_user(current_user: User = Depends(get_current_user))
 @router.post("/register", response_model=UserProfileResponse, status_code=status.HTTP_201_CREATED)
 async def register_user(
     user_data: UserRegisterRequest,
+    request: Request,
     db: AsyncSession = Depends(get_database_session)
 ):
     """
@@ -118,6 +119,7 @@ async def register_user(
     
     Args:
         user_data: User registration data
+        request: Request object (for tenant context)
         db: Database session
         
     Returns:
@@ -126,8 +128,17 @@ async def register_user(
     Raises:
         HTTPException: If email already exists or validation fails
     """
+    tenant_id = getattr(request.state, "tenant_id", None)
     auth_service = AuthService(db)
-    user = await auth_service.register_user(user_data)
+    try:
+        user = await auth_service.register_user(user_data, tenant_id=tenant_id)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Registration failed: {str(e)}"
+        )
     return UserProfileResponse.model_validate(user)
 
 
