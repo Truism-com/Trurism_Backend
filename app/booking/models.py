@@ -16,6 +16,7 @@ import enum
 from datetime import datetime
 
 from app.core.database import Base
+from app.core.mixins import TenantMixin
 
 
 class BookingStatus(str, enum.Enum):
@@ -84,7 +85,7 @@ class PassengerType(str, enum.Enum):
     INFANT = "INF"
 
 
-class PassengerInfo(Base):
+class PassengerInfo(Base, TenantMixin):
     """
     Passenger information model for bookings.
     
@@ -110,7 +111,7 @@ class PassengerInfo(Base):
     flight_bookings = relationship("FlightBooking", back_populates="passengers")
 
 
-class FlightBooking(Base):
+class FlightBooking(Base, TenantMixin):
     """
     Flight booking model for managing flight reservations.
     
@@ -171,7 +172,7 @@ class FlightBooking(Base):
     passengers = relationship("PassengerInfo", secondary="flight_booking_passengers")
 
 
-class HotelBooking(Base):
+class HotelBooking(Base, TenantMixin):
     """
     Hotel booking model for managing hotel reservations.
     
@@ -232,7 +233,7 @@ class HotelBooking(Base):
     expires_at = Column(DateTime(timezone=True), nullable=True)  # Booking expiry time
 
 
-class BusBooking(Base):
+class BusBooking(Base, TenantMixin):
     """
     Bus booking model for managing bus reservations.
     

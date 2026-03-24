@@ -16,6 +16,7 @@ import enum
 from datetime import datetime
 
 from app.core.database import Base
+from app.core.mixins import TenantMixin
 
 if TYPE_CHECKING:
     from app.auth.models import User
@@ -55,7 +56,7 @@ class TopupStatus(str, enum.Enum):
     COMPLETED = "completed"
 
 
-class Wallet(Base):
+class Wallet(Base, TenantMixin):
     """
     User wallet model for balance management.
     
@@ -122,7 +123,7 @@ class Wallet(Base):
         return f"<Wallet(id={self.id}, user_id={self.user_id}, balance={self.balance})>"
 
 
-class WalletTransaction(Base):
+class WalletTransaction(Base, TenantMixin):
     """
     Wallet transaction model for tracking all wallet operations.
     
@@ -178,7 +179,7 @@ class WalletTransaction(Base):
         return f"<WalletTransaction(id={self.id}, ref={self.transaction_ref}, type={self.type}, amount={self.amount})>"
 
 
-class WalletTopupRequest(Base):
+class WalletTopupRequest(Base, TenantMixin):
     """
     Wallet top-up request model for adding funds.
     
@@ -229,7 +230,7 @@ class WalletTopupRequest(Base):
         return f"<WalletTopupRequest(id={self.id}, amount={self.amount}, status={self.status})>"
 
 
-class CreditLimit(Base):
+class CreditLimit(Base, TenantMixin):
     """
     Credit limit configuration for agents.
     
