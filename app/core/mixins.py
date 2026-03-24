@@ -20,7 +20,7 @@ class TenantMixin:
     
     @declared_attr
     def tenant_id(cls):
-        return Column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
+        return Column(Integer, ForeignKey("tenants.id"), nullable=True)
 
     @declared_attr
     def __table_args__(cls):
