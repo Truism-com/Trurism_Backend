@@ -138,7 +138,7 @@ class AmendmentRequest(Base):
     request_number: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
     
     # Booking reference
-    booking_id: Mapped[int] = mapped_column(Integer, ForeignKey("bookings.id"), nullable=False)
+    booking_id: Mapped[int] = mapped_column(Integer, nullable=False)
     booking_type: Mapped[str] = mapped_column(String(50), nullable=False)  # flight, hotel, etc.
     booking_reference: Mapped[str] = mapped_column(String(100), nullable=False)
     
