@@ -16,6 +16,8 @@ from app.tenant.models import Tenant
 logger = logging.getLogger(__name__)
 
 
+from app.core.redis import get_tenant_cache, set_tenant_cache
+
 class TenantMiddleware(BaseHTTPMiddleware):
     """
     Middleware to identify and inject tenant context.
@@ -28,11 +30,6 @@ class TenantMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         """
         Process request and inject tenant context.
-        
-        Priority order for tenant identification:
-        1. X-Tenant-ID header (explicit tenant ID)
-        2. X-Tenant-Code header (explicit tenant code)
-        3. Host header (domain-based routing)
         """
         # Skip tenant resolution for certain paths
         skip_paths = [
@@ -40,7 +37,9 @@ class TenantMiddleware(BaseHTTPMiddleware):
             "/redoc",
             "/openapi.json",
             "/health",
-            "/v1/admin/tenants"  # Admin endpoints for tenant management
+            "/auth",
+            "/v1/admin/tenants",
+            "/favicon.ico"
         ]
         
         if any(request.url.path.startswith(path) for path in skip_paths):
@@ -48,11 +47,11 @@ class TenantMiddleware(BaseHTTPMiddleware):
             request.state.tenant_id = None
             return await call_next(request)
         
-        tenant = None
         tenant_id = None
-        
-        # Method 1: Check X-Tenant-ID header
+        tenant_code = request.headers.get("X-Tenant-Code")
         tenant_id_header = request.headers.get("X-Tenant-ID")
+        host = request.headers.get("Host", "").split(":")[0]
+        
         if tenant_id_header:
             try:
                 tenant_id = int(tenant_id_header)
@@ -62,31 +61,38 @@ class TenantMiddleware(BaseHTTPMiddleware):
                     detail="Invalid X-Tenant-ID header"
                 )
         
-        # Method 2: Check X-Tenant-Code header
-        tenant_code = request.headers.get("X-Tenant-Code")
+        cache_key = f"id:{tenant_id}" if tenant_id else (f"code:{tenant_code}" if tenant_code else f"host:{host}")
         
-        # Method 3: Extract from Host header
-        host = request.headers.get("Host", "").split(":")[0]  # Remove port if present
-        
+        # Try to get from Redis cache first
+        cached_tenant = await get_tenant_cache(cache_key)
+        if cached_tenant:
+            request.state.tenant_id = cached_tenant.get("id")
+            request.state.tenant = cached_tenant
+            logger.debug(f"Resolved tenant from Redis cache: {cached_tenant.get('code')}")
+            
+            response = await call_next(request)
+            response.headers["X-Tenant-Resolver"] = "cache"
+            if request.state.tenant_id:
+                response.headers["X-Tenant-ID"] = str(request.state.tenant_id)
+            return response
+
         # Resolve tenant from database
+        tenant = None
         try:
             from app.core.database import async_session_maker
             
             async with async_session_maker() as db:
                 if tenant_id:
-                    # Query by ID
                     result = await db.execute(
                         select(Tenant).where(Tenant.id == tenant_id, Tenant.is_active == True)
                     )
                     tenant = result.scalar_one_or_none()
                 elif tenant_code:
-                    # Query by code
                     result = await db.execute(
                         select(Tenant).where(Tenant.code == tenant_code, Tenant.is_active == True)
                     )
                     tenant = result.scalar_one_or_none()
                 elif host:
-                    # Query by domain or subdomain
                     result = await db.execute(
                         select(Tenant).where(
                             (Tenant.domain == host) | (Tenant.subdomain == host.split(".")[0]),
@@ -97,27 +103,41 @@ class TenantMiddleware(BaseHTTPMiddleware):
                 
                 if tenant:
                     tenant_id = tenant.id
-                    logger.info(f"Resolved tenant: {tenant.code} (ID: {tenant.id})")
+                    tenant_data = {
+                        "id": tenant.id,
+                        "code": tenant.code,
+                        "name": tenant.name,
+                        "domain": tenant.domain,
+                        "subdomain": tenant.subdomain,
+                        "is_active": tenant.is_active
+                    }
+                    # Cache in Redis for 10 minutes
+                    await set_tenant_cache(cache_key, tenant_data, ttl=600)
+                    logger.info(f"Resolved tenant from DB: {tenant.code} (ID: {tenant.id}) - Cached in Redis")
+                    
+                    # For downstream logic that might expect a model object, 
+                    # we'll store the object in the request state only for the first time
+                    request.state.tenant = tenant
                 else:
-                    # For development: allow requests without tenant
-                    # In production, you might want to raise an error here
-                    logger.warning(f"No tenant resolved for host: {host}")
+                    logger.warning(f"No tenant resolved for query: {cache_key}")
+                    request.state.tenant = None
         
         except Exception as e:
             logger.error(f"Error resolving tenant: {e}")
-            # Continue without tenant in development
-            # In production, consider raising an error
+            request.state.tenant = None
         
-        # Inject tenant context into request state
-        request.state.tenant = tenant
         request.state.tenant_id = tenant_id
         
         response = await call_next(request)
+        response.headers["X-Tenant-Resolver"] = "db"
         
-        # Add tenant information to response headers (optional)
-        if tenant:
-            response.headers["X-Tenant-Code"] = tenant.code
-            response.headers["X-Tenant-ID"] = str(tenant.id)
+        if tenant_id:
+            # We use t_data if it was from cache, but here we might not have it
+            # Let's ensure we have accessibility to tenant code
+            t_code = getattr(request.state.tenant, "code", None) if hasattr(request.state.tenant, "code") else (request.state.tenant.get("code") if isinstance(request.state.tenant, dict) else None)
+            if t_code:
+                response.headers["X-Tenant-Code"] = t_code
+            response.headers["X-Tenant-ID"] = str(tenant_id)
         
         return response
 

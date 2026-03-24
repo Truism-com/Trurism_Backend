@@ -25,6 +25,7 @@ from app.wallet.schemas import (
     WalletCreate, TransactionFilter, TopupRequest, CreditLimitRequest
 )
 from app.core.config import settings
+from app.core.redis import get_redis_client, set_wallet_hold, get_wallet_hold
 
 import logging
 
@@ -80,7 +81,7 @@ class WalletService:
     
     def __init__(self, db: AsyncSession):
         self.db = db
-        self._holds: Dict[str, Dict[str, Any]] = {}  # In-memory holds (use Redis in production)
+        self.redis = get_redis_client()
     
     # =========================================================================
     # Wallet CRUD Operations
@@ -532,16 +533,17 @@ class WalletService:
         wallet.hold_amount += amount
         await self.db.commit()
         
-        # Store hold details (use Redis in production)
-        self._holds[hold_id] = {
+        # Store hold details in Redis using unified utility
+        hold_data = {
             "wallet_id": wallet.id,
             "user_id": user_id,
-            "amount": amount,
+            "amount": float(amount),
             "booking_id": booking_id,
             "booking_type": booking_type,
-            "expires_at": expires_at,
+            "expires_at": expires_at.isoformat(),
             "status": "active"
         }
+        await set_wallet_hold(hold_id, hold_data, ttl=expiry_minutes * 60)
         
         logger.info(f"Placed hold {hold_id} for {amount} on wallet {wallet.id}")
         
@@ -571,9 +573,10 @@ class WalletService:
         Returns:
             WalletTransaction if converted to debit, None otherwise
         """
-        hold = self._holds.get(hold_id)
+        hold = await get_wallet_hold(hold_id)
+        
         if not hold:
-            raise WalletError(f"Hold {hold_id} not found")
+            raise WalletError(f"Hold {hold_id} not found or expired")
         
         if hold["status"] != "active":
             raise WalletError(f"Hold {hold_id} is not active")
@@ -597,7 +600,13 @@ class WalletService:
                 use_credit=False  # Already validated during hold
             )
         
-        hold["status"] = "released" if not convert_to_debit else "converted"
+        if self.redis:
+            if not convert_to_debit:
+                await self.redis.delete(f"wallet:hold:{hold_id}")
+            else:
+                hold["status"] = "converted"
+                await self.redis.set(f"wallet:hold:{hold_id}", json.dumps(hold))
+        
         await self.db.commit()
         
         logger.info(f"Released hold {hold_id}, converted to debit: {convert_to_debit}")

@@ -15,6 +15,7 @@ import enum
 from datetime import datetime
 
 from app.core.database import Base
+from app.core.mixins import TenantMixin
 
 
 class PaymentTransactionStatus(str, enum.Enum):
@@ -49,7 +50,7 @@ class FeeType(str, enum.Enum):
     PERCENTAGE = "percentage"
 
 
-class PaymentTransaction(Base):
+class PaymentTransaction(Base, TenantMixin):
     """
     Payment transaction model for Razorpay payments.
     
@@ -102,7 +103,7 @@ class PaymentTransaction(Base):
         return f"<PaymentTransaction(id={self.id}, order_id={self.razorpay_order_id}, status={self.status})>"
 
 
-class Refund(Base):
+class Refund(Base, TenantMixin):
     """
     Refund model for tracking refund operations.
     

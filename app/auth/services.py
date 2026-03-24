@@ -34,12 +34,13 @@ class AuthService:
     def __init__(self, db: AsyncSession):
         self.db = db
     
-    async def register_user(self, user_data: UserRegisterRequest) -> User:
+    async def register_user(self, user_data: UserRegisterRequest, tenant_id: int | None = None) -> User:
         """
         Register a new user in the system.
         
         Args:
             user_data (UserRegisterRequest): User registration data
+            tenant_id (int | None): Optional tenant ID from request context
             
         Returns:
             User: Created user object
@@ -65,7 +66,8 @@ class AuthService:
             role=user_data.role,
             company_name=user_data.company_name,
             pan_number=user_data.pan_number,
-            approval_status=AgentApprovalStatus.PENDING if user_data.role == UserRole.AGENT else None
+            approval_status=AgentApprovalStatus.PENDING if user_data.role == UserRole.AGENT else None,
+            tenant_id=tenant_id
         )
         
         self.db.add(user)
