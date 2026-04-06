@@ -132,6 +132,7 @@ async def register_user(
     auth_service = AuthService(db)
     try:
         user = await auth_service.register_user(user_data, tenant_id=tenant_id)
+        return UserProfileResponse.model_validate(user)
     except HTTPException:
         raise
     except Exception as e:
@@ -139,9 +140,8 @@ async def register_user(
         logging.error(f"Registration failed: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Registration failed. Please try again later."
+            detail=f"Registration failed: {type(e).__name__}: {str(e)}"
         )
-    return UserProfileResponse.model_validate(user)
 
 
 @router.post("/login", response_model=TokenResponse)
