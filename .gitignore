@@ -422,3 +422,9 @@ local/
 # Keep example files
 !.env.example
 !requirements-dev.txt
+
+# AI assistant files
+.agent/
+.agents/
+.gemini/
+tmp_*
