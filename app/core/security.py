@@ -20,7 +20,9 @@ import hashlib
 from app.core.config import settings
 
 # Password hashing context
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# Use pbkdf2_sha256 as primary to avoid bcrypt versioning issues on Azure/Windows.
+# Retain bcrypt for backward compatibility with existing hashes.
+pwd_context = CryptContext(schemes=["pbkdf2_sha256", "bcrypt"], deprecated="auto")
 
 
 async def _get_redis_client():
