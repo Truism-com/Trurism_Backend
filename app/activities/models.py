@@ -8,6 +8,7 @@ from sqlalchemy import (
     Column, Integer, String, Text, Boolean, Float,
     ForeignKey, DateTime, Date, Time, Enum, Index, JSON
 )
+from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 from datetime import datetime, date, time
 from typing import Optional, List
@@ -52,8 +53,8 @@ class ActivityCategory(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     display_order: Mapped[int] = mapped_column(Integer, default=0)
     
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), onupdate=func.now())
     
     # Relationships
     activities: Mapped[List["Activity"]] = relationship("Activity", back_populates="category")
@@ -89,8 +90,8 @@ class ActivityLocation(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     display_order: Mapped[int] = mapped_column(Integer, default=0)
     
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), onupdate=func.now())
     
     # Relationships
     activities: Mapped[List["Activity"]] = relationship("Activity", back_populates="location")
@@ -173,8 +174,8 @@ class Activity(Base):
     
     # Audit
     created_by_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"))
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), onupdate=func.now())
     
     # Relationships
     category: Mapped[Optional["ActivityCategory"]] = relationship("ActivityCategory", back_populates="activities")
@@ -222,7 +223,7 @@ class ActivitySlot(Base):
     is_blocked: Mapped[bool] = mapped_column(Boolean, default=False)  # Manually blocked
     block_reason: Mapped[Optional[str]] = mapped_column(String(200))
     
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     
     # Relationships
     activity: Mapped["Activity"] = relationship("Activity", back_populates="slots")
@@ -304,8 +305,8 @@ class ActivityBooking(Base):
     booked_by_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"))
     
     # Timestamps
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), onupdate=func.now())
     
     # Relationships
     activity: Mapped["Activity"] = relationship("Activity", back_populates="bookings")

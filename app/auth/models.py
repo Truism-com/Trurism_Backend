@@ -8,7 +8,7 @@ This module defines the database models for user authentication:
 - Audit fields for tracking user activity
 """
 
-from sqlalchemy import Column, Integer, String, DateTime, Boolean, Text, Enum
+from sqlalchemy import Column, Integer, String, DateTime, Boolean, Text, Enum, ForeignKey
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 import enum
@@ -89,6 +89,8 @@ class User(Base, TenantMixin):
     refresh_tokens = relationship("RefreshToken", back_populates="user")
     # Wallet relationship
     wallet = relationship("Wallet", back_populates="user", uselist=False)
+    # Social accounts (dashboard module)
+    social_accounts = relationship("SocialAccount", back_populates="user")
     
     def __repr__(self):
         return f"<User(id={self.id}, email={self.email}, role={self.role})>"
@@ -116,7 +118,7 @@ class RefreshToken(Base, TenantMixin):
     __tablename__ = "refresh_tokens"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     token = Column(String(500), unique=True, nullable=False)
     expires_at = Column(DateTime(timezone=True), nullable=False)
     is_revoked = Column(Boolean, default=False, nullable=False)
