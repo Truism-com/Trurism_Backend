@@ -135,9 +135,11 @@ async def register_user(
     except HTTPException:
         raise
     except Exception as e:
+        import logging
+        logging.error(f"Registration failed: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Registration failed: {str(e)}"
+            detail="Registration failed. Please try again later."
         )
     return UserProfileResponse.model_validate(user)
 
