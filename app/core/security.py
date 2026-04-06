@@ -141,7 +141,9 @@ class SecurityManager:
 
             return payload
 
-        except jwt.PyJWTError:
+        except (jwt.JWTError, jwt.JWTClaimsError, jwt.ExpiredSignatureError, Exception) as e:
+            if isinstance(e, HTTPException):
+                raise
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Could not validate credentials",
