@@ -262,11 +262,17 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     This handler provides detailed validation error information
     for better API usability and debugging.
     """
+    # Strip internal Pydantic URL field from error details
+    errors = []
+    for err in exc.errors():
+        clean_err = {k: v for k, v in err.items() if k != "url"}
+        errors.append(clean_err)
+    
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         content={
             "detail": "Validation error",
-            "errors": exc.errors(),
+            "errors": errors,
             "path": request.url.path
         }
     )
