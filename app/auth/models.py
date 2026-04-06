@@ -82,9 +82,9 @@ class User(Base, TenantMixin):
     last_login = Column(DateTime(timezone=True), nullable=True)
     
     # Relationships
-    flight_bookings = relationship("FlightBooking", back_populates="user")
-    hotel_bookings = relationship("HotelBooking", back_populates="user")
-    bus_bookings = relationship("BusBooking", back_populates="user")
+    flight_bookings = relationship("FlightBooking", back_populates="user", foreign_keys="[FlightBooking.user_id]")
+    hotel_bookings = relationship("HotelBooking", back_populates="user", foreign_keys="[HotelBooking.user_id]")
+    bus_bookings = relationship("BusBooking", back_populates="user", foreign_keys="[BusBooking.user_id]")
     # Refresh tokens relationship
     refresh_tokens = relationship("RefreshToken", back_populates="user")
     # Wallet relationship
