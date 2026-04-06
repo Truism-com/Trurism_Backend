@@ -107,8 +107,8 @@ class PassengerInfo(Base, TenantMixin):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
-    # Relationships
-    flight_bookings = relationship("FlightBooking", back_populates="passengers")
+    # Relationships (via secondary table flight_booking_passengers)
+    flight_bookings = relationship("FlightBooking", secondary="flight_booking_passengers", viewonly=True)
 
 
 class FlightBooking(Base, TenantMixin):

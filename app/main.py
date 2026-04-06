@@ -15,7 +15,8 @@ The application follows a modular architecture with separate modules for:
 import os
 os.environ.setdefault("RATELIMIT_STORAGE_URL", "memory://")
 
-from fastapi import FastAPI, Request, status
+from fastapi import FastAPI, Request, status, Depends
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
@@ -122,9 +123,13 @@ async def lifespan(app: FastAPI):
     
     # Shutdown
     logger.info("Shutting down Travel Booking Platform API...")
-    # TODO: Close database connections
-    # Close redis connections if any (module-level clients will handle their own cleanup)
-    # TODO: Stop background tasks
+    # Close database connections
+    try:
+        from app.core.database import engine
+        await engine.dispose()
+        logger.info("Database engine disposed")
+    except Exception as e:
+        logger.error(f"Error disposing database engine: {e}")
     logger.info("Travel Booking Platform API shutdown complete")
 
 
@@ -277,6 +282,16 @@ async def general_exception_handler(request: Request, exc: Exception):
     """
     logger.error(f"Unhandled exception on {request.url.path}: {exc}", exc_info=True)
     
+    # In production, hide internal error details
+    if settings.environment == "production":
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={
+                "detail": "Internal server error",
+                "path": request.url.path
+            }
+        )
+    
     # In production, we should probably be more careful,
     # but for debugging this 500, we need the error message.
     return JSONResponse(
@@ -359,11 +374,23 @@ async def root():
 
 
 @app.post("/admin/init-db", tags=["Admin"], include_in_schema=True)
-async def manual_init_db():
+async def manual_init_db(
+    credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer())
+):
     """
     Manually trigger database initialization.
-    DANGEROUS: Use only for debugging table creation.
+    Requires admin authentication.
     """
+    # Verify admin token
+    from app.core.security import SecurityManager
+    payload = await SecurityManager.verify_token(credentials.credentials, "access")
+    role = payload.get("role", "")
+    if role != "admin":
+        return JSONResponse(
+            status_code=403,
+            content={"detail": "Admin access required"}
+        )
+    
     try:
         from app.core.database import init_database
         await init_database()
@@ -372,7 +399,7 @@ async def manual_init_db():
         logger.error(f"Manual DB init failed: {e}", exc_info=True)
         return JSONResponse(
             status_code=500,
-            content={"error": str(e), "type": type(e).__name__}
+            content={"error": str(e) if settings.debug else "Initialization failed", "type": type(e).__name__ if settings.debug else "Error"}
         )
 
 

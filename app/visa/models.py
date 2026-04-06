@@ -8,6 +8,7 @@ from sqlalchemy import (
     Column, Integer, String, Text, Boolean, Float,
     ForeignKey, DateTime, Date, Enum, Index, JSON
 )
+from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 from datetime import datetime, date
 from typing import Optional, List
@@ -57,8 +58,8 @@ class VisaCountry(Base):
     display_order: Mapped[int] = mapped_column(Integer, default=0)
     
     # Timestamps
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), onupdate=func.now())
     
     # Relationships
     visa_types: Mapped[List["VisaType"]] = relationship("VisaType", back_populates="country", cascade="all, delete-orphan")
@@ -110,8 +111,8 @@ class VisaType(Base):
     display_order: Mapped[int] = mapped_column(Integer, default=0)
     
     # Timestamps
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), onupdate=func.now())
     
     # Relationships
     country: Mapped["VisaCountry"] = relationship("VisaCountry", back_populates="visa_types")
@@ -224,8 +225,8 @@ class VisaApplication(Base):
     admin_notes: Mapped[Optional[str]] = mapped_column(Text)
     
     # Timestamps
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), onupdate=func.now())
     
     # Relationships
     visa_type: Mapped["VisaType"] = relationship("VisaType", back_populates="applications")

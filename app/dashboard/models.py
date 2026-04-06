@@ -8,6 +8,7 @@ from sqlalchemy import (
     Column, Integer, String, Text, Boolean, Float,
     ForeignKey, DateTime, Date, Enum, Index, JSON
 )
+from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 from datetime import datetime
 from typing import Optional, List
@@ -114,7 +115,7 @@ class SocialAccount(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     
     # Audit
-    linked_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    linked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     last_used_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
     
     # Relationships
@@ -173,8 +174,8 @@ class AmendmentRequest(Base):
     processed_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
     
     # Audit
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), onupdate=func.now())
     
     # Relationships
     user: Mapped["User"] = relationship("User", foreign_keys=[user_id])
@@ -231,8 +232,8 @@ class UserQuery(Base):
     resolved_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
     
     # Audit
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), onupdate=func.now())
     
     # Relationships
     user: Mapped["User"] = relationship("User", foreign_keys=[user_id])
@@ -267,7 +268,7 @@ class QueryResponse(Base):
     is_internal_note: Mapped[bool] = mapped_column(Boolean, default=False)
     
     # Audit
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     
     # Relationships
     query: Mapped["UserQuery"] = relationship("UserQuery", back_populates="responses")
@@ -309,7 +310,7 @@ class ActivityLog(Base):
     device_info: Mapped[Optional[str]] = mapped_column(JSON)
     
     # Audit
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     
     __table_args__ = (
         Index('idx_activity_user', 'user_id'),

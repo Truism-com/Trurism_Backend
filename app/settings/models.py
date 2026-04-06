@@ -8,6 +8,7 @@ from sqlalchemy import (
     Column, Integer, String, Text, Boolean, Float,
     ForeignKey, DateTime, Enum, Index, JSON
 )
+from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 from datetime import datetime
 from typing import Optional, List
@@ -64,8 +65,8 @@ class ConvenienceFee(Base):
     
     # Audit
     created_by_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"))
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), onupdate=func.now())
     
     __table_args__ = (
         Index('idx_fee_service_payment', 'service_type', 'payment_mode'),
@@ -95,8 +96,8 @@ class StaffRole(Base):
     tenant_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("tenants.id"))
     
     # Audit
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), onupdate=func.now())
     
     # Relationships
     staff_members: Mapped[List["StaffMember"]] = relationship("StaffMember", back_populates="role")
@@ -124,7 +125,7 @@ class StaffPermission(Base):
     # Order for display
     display_order: Mapped[int] = mapped_column(Integer, default=0)
     
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     
     __table_args__ = (
         Index('idx_permission_module', 'module'),
@@ -168,8 +169,8 @@ class StaffMember(Base):
     
     # Audit
     created_by_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"))
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), onupdate=func.now())
     last_login_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
     
     # Relationships
@@ -213,8 +214,8 @@ class SystemSetting(Base):
     
     # Audit
     updated_by_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"))
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), onupdate=func.now())
     
     __table_args__ = (
         Index('idx_setting_key_tenant', 'key', 'tenant_id', unique=True),

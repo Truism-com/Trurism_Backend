@@ -8,6 +8,7 @@ from sqlalchemy import (
     Column, Integer, String, Text, Boolean, Float,
     ForeignKey, DateTime, Date, Time, Enum, Index, JSON
 )
+from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 from datetime import datetime, date, time
 from typing import Optional, List
@@ -60,8 +61,8 @@ class CarType(Base):
     display_order: Mapped[int] = mapped_column(Integer, default=0)
     
     # Timestamps
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), onupdate=func.now())
     
     # Relationships
     routes: Mapped[List["TransferRoute"]] = relationship("TransferRoute", back_populates="car_type")
@@ -129,8 +130,8 @@ class TransferRoute(Base):
     display_order: Mapped[int] = mapped_column(Integer, default=0)
     
     # Timestamps
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), onupdate=func.now())
     
     # Relationships
     car_type: Mapped["CarType"] = relationship("CarType", back_populates="routes")
@@ -237,8 +238,8 @@ class TransferBooking(Base):
     
     # Audit
     booked_by_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"))
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), onupdate=func.now())
     
     # Relationships
     route: Mapped[Optional["TransferRoute"]] = relationship("TransferRoute", back_populates="bookings")
