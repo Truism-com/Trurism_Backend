@@ -143,9 +143,29 @@ class SecurityManager:
 
             return payload
 
-        except (jwt.JWTError, jwt.JWTClaimsError, jwt.ExpiredSignatureError, Exception) as e:
-            if isinstance(e, HTTPException):
-                raise
+        except HTTPException:
+            # Re-raise HTTPExceptions (our custom errors)
+            raise
+        except jwt.ExpiredSignatureError:
+            # Specific handling for expired tokens
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Token has expired",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        except jwt.JWTError as jwt_err:
+            # Specific handling for JWT errors
+            import logging
+            logging.debug(f"JWT validation error: {str(jwt_err)}")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Could not validate credentials",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        except Exception as e:
+            # Catch any other unforeseen errors
+            import logging
+            logging.error(f"Unexpected error during token verification: {str(e)}", exc_info=True)
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Could not validate credentials",
