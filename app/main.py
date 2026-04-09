@@ -101,7 +101,8 @@ async def lifespan(app: FastAPI):
         else:
             logger.info("Skipping database health check due to SKIP_DB_INIT env var")
     except Exception as e:
-        logger.error(f"Database initialization failed (non-fatal): {e}")
+        logger.error(f"Database initialization failed: {e}")
+        logger.error("HINT: If this is on Azure, check if 'Allow Azure Services' is enabled in your Database Networking settings.")
         logger.error("API will start but database-dependent endpoints will not work")
     
     # Check Redis (if configured) - Non-blocking, optional service
