@@ -52,6 +52,7 @@ from app.pricing.api import router as pricing_router, admin_router as pricing_ad
 from app.company.api import router as company_router
 from app.files.api import router as files_router
 from app.tenant.middleware import TenantMiddleware
+from app.newsletter.api import router as newsletter_router
 
 
 # Configure logging
@@ -412,6 +413,7 @@ async def manual_init_db(
 
 # Include module routers
 app.include_router(auth_router)
+app.include_router(newsletter_router)
 app.include_router(search_router)
 app.include_router(booking_router)
 app.include_router(admin_router)

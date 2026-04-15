@@ -123,6 +123,7 @@ async def init_database():
         import app.auth.models  # noqa: F401
         import app.booking.models  # noqa: F401
         import app.api_keys.models  # noqa: F401
+        import app.newsletter.models #Added these line 
         import app.tenant.models  # noqa: F401
         import app.markup.models  # noqa: F401
         import app.wallet.models  # noqa: F401
