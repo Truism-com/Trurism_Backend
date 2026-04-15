@@ -587,7 +587,6 @@ class HotelEnquiry(Base):
 # =============================================================================
 # OFFLINE HOTEL BOOKING
 # =============================================================================
-
 class OfflineHotelBooking(Base):
     """Offline hotel bookings."""
     __tablename__ = "offline_hotel_bookings"
@@ -610,6 +609,14 @@ class OfflineHotelBooking(Base):
     guest_nationality: Mapped[Optional[str]] = mapped_column(String(100))
     guest_id_type: Mapped[Optional[str]] = mapped_column(String(50))  # passport, aadhar, etc.
     guest_id_number: Mapped[Optional[str]] = mapped_column(String(100))
+
+    # ✅ NEW: GST Details
+    gst_number: Mapped[Optional[str]] = mapped_column(String(15))
+    gst_company_name: Mapped[Optional[str]] = mapped_column(String(255))
+
+    # ✅ NEW: Passport Details
+    passport_number: Mapped[Optional[str]] = mapped_column(String(20))
+    passport_expiry: Mapped[Optional[date]] = mapped_column(Date)
     
     # Stay details
     check_in_date: Mapped[date] = mapped_column(Date, nullable=False)

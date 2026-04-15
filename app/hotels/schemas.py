@@ -10,6 +10,8 @@ from datetime import datetime, date
 from enum import Enum
 
 from app.hotels.models import HotelStatus, ContractStatus, BookingStatus, RateType
+import re
+from pydantic import field_validator
 
 
 # =============================================================================
@@ -570,6 +572,9 @@ class HotelEnquiryListResponse(BaseModel):
 # =============================================================================
 # BOOKING SCHEMAS
 # =============================================================================
+# =============================================================================
+# BOOKING SCHEMAS
+# =============================================================================
 
 class BookingBase(BaseModel):
     hotel_id: int
@@ -582,6 +587,14 @@ class BookingBase(BaseModel):
     guest_nationality: Optional[str] = None
     guest_id_type: Optional[str] = None
     guest_id_number: Optional[str] = None
+
+    # ✅ GST Details
+    gst_number: Optional[str] = Field(None, description="GST number")
+    gst_company_name: Optional[str] = Field(None, description="GST company name")
+
+    # ✅ Passport Details
+    passport_number: Optional[str] = Field(None, description="Passport number")
+    passport_expiry: Optional[date] = Field(None, description="Passport expiry date")
     
     check_in_date: date
     check_out_date: date
@@ -591,6 +604,21 @@ class BookingBase(BaseModel):
     
     meal_plan: Optional[str] = None
     special_requests: Optional[str] = None
+
+    # ✅ VALIDATION
+    @field_validator("gst_number")
+    @classmethod
+    def validate_gst(cls, v):
+        if v and not re.match(r"^[0-9A-Z]{15}$", v):
+            raise ValueError("Invalid GST number format")
+        return v
+
+    @field_validator("passport_number")
+    @classmethod
+    def validate_passport(cls, v):
+        if v and not re.match(r"^[A-Z0-9]{6,9}$", v):
+            raise ValueError("Invalid passport number format")
+        return v
 
 
 class BookingCreate(BookingBase):
@@ -623,6 +651,12 @@ class BookingResponse(BaseModel):
     guest_name: str
     guest_email: str
     guest_phone: str
+
+    # ✅ NEW FIELDS
+    gst_number: Optional[str]
+    gst_company_name: Optional[str]
+    passport_number: Optional[str]
+    passport_expiry: Optional[date]
     
     check_in_date: date
     check_out_date: date
@@ -655,6 +689,12 @@ class BookingDetail(BookingResponse):
     guest_nationality: Optional[str]
     guest_id_type: Optional[str]
     guest_id_number: Optional[str]
+
+    # ✅ OPTIONAL (inherits but safe to include)
+    gst_number: Optional[str]
+    gst_company_name: Optional[str]
+    passport_number: Optional[str]
+    passport_expiry: Optional[date]
     
     extra_adult_charge: float
     extra_child_charge: float
@@ -680,7 +720,6 @@ class BookingListResponse(BaseModel):
     total: int
     page: int
     page_size: int
-
 
 # =============================================================================
 # AVAILABILITY CHECK
