@@ -481,7 +481,7 @@ class BusBookingService(BaseBookingService):
                 bus_booking.status = BookingStatus.CONFIRMED
                 bus_booking.ticket_number = self._generate_ticket_number()
             
-                await self.db.commit()
+            await self.db.commit()
             await self.db.refresh(bus_booking)
 
             # Send booking confirmation email (non-blocking)
