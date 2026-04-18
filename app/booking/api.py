@@ -20,10 +20,11 @@ from app.booking.schemas import (
     FlightBookingRequest, HotelBookingRequest, BusBookingRequest,
     FlightBookingResponse, HotelBookingResponse, BusBookingResponse,
     BookingListResponse, BookingDetailsResponse, CancelBookingRequest,
-    CancelBookingResponse
+    CancelBookingResponse, SeatLayoutResponse
 )
 from app.booking.services import FlightBookingService, HotelBookingService, BusBookingService
 from app.booking.models import BookingStatus
+
 
 # Router for booking endpoints
 router = APIRouter(prefix="/bookings", tags=["Bookings"])
@@ -143,27 +144,15 @@ async def create_bus_booking(
     request: Request = None,
     db: AsyncSession = Depends(get_database_session)
 ):
-    """
-    Create a new bus booking.
-    
-    This endpoint creates a bus booking for the authenticated user.
-    It processes payment and confirms the booking if payment is successful.
-    Automatically tracks who created the booking (salesperson/agent tracking).
-    
-    Args:
-        booking_request: Bus booking request data
-        current_user: Current authenticated user (who created this booking)
-        db: Database session
-        
-    Returns:
-        BusBookingResponse: Created bus booking details
-        
-    Raises:
-        HTTPException: If booking creation fails or payment fails
-    """
     try:
-        # TODO: Get actual bus data from search results using bus_id
-        # For now, using mock bus data
+        # ✅ Duplicate seat check
+        if booking_request.selected_seats:
+            if len(booking_request.selected_seats) != len(set(booking_request.selected_seats)):
+                raise HTTPException(
+                    status_code=400,
+                    detail="Duplicate seats selected"
+                )
+
         bus_data = {
             "price": 1200.0,
             "operator": "GoBus",
@@ -173,22 +162,39 @@ async def create_bus_booking(
             "departure_time": "2025-01-15T20:00:00",
             "arrival_time": "2025-01-16T04:00:00"
         }
-        
+
         tenant_id = getattr(request.state, "tenant_id", None)
         booking_service = BusBookingService(db, tenant_id=tenant_id)
-        # Track who created this booking (for B2B agent tracking)
+
         booking = await booking_service.create_bus_booking(
             current_user, booking_request, bus_data, created_by_user=current_user
         )
-        
+
         return BusBookingResponse.model_validate(booking)
-        
+
+    except HTTPException:
+        raise
+
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Bus booking creation failed: {str(e)}"
         )
-
+    
+@router.get("/buses/{offer_id}/seats", response_model=SeatLayoutResponse)
+async def get_bus_seat_layout(
+    offer_id: str,
+    db: AsyncSession = Depends(get_database_session)
+):
+    """
+    Get seat layout for a bus (mock for now)
+    """
+    return SeatLayoutResponse(
+        rows=5,
+        columns=4,
+        available_seats=["A1", "A2", "A3", "B1", "B2"],
+        booked_seats=["A4", "B3"]
+    )
 
 @router.get("/", response_model=BookingListResponse)
 async def get_user_bookings(
@@ -524,3 +530,5 @@ async def cancel_booking(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to cancel booking: {str(e)}"
         )
+    
+    

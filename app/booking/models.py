@@ -266,7 +266,7 @@ class BusBooking(Base, TenantMixin):
     # Booking details
     travel_date = Column(DateTime(timezone=True), nullable=False)
     passengers = Column(Integer, nullable=False)
-    seat_numbers = Column(JSON, nullable=True)  # Store seat numbers as JSON array
+    selected_seats = Column(JSON, nullable=True)  # Store seat numbers as JSON array
     
     # Passenger information
     passenger_details = Column(JSON, nullable=False)  # Store passenger info as JSON

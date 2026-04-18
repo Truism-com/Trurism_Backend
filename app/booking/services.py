@@ -380,7 +380,6 @@ class BusBookingService(BaseBookingService):
         self.payment_processor = BookingPaymentProcessor(db)
 
     def _generate_ticket_number(self) -> str:
-        """Generate unique ticket number."""
         import uuid
         return f"TKT{uuid.uuid4().hex[:10].upper()}"
 
@@ -392,13 +391,45 @@ class BusBookingService(BaseBookingService):
         created_by_user: Optional[User] = None,
         payment_mode: PaymentMode = PaymentMode.WALLET
     ) -> BusBooking:
-        """Create bus booking with tenant isolation."""
         try:
             booking_reference = self._generate_booking_reference()
-            
+
+            # ✅ passengers vs seats validation
+            if len(booking_request.selected_seats) != booking_request.passengers:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Seats count must match passengers"
+                )
+
+            # ✅ duplicate seats check
+            if len(booking_request.selected_seats) != len(set(booking_request.selected_seats)):
+                raise HTTPException(
+                    status_code=400,
+                    detail="Duplicate seats selected"
+                )
+
+            # ✅ already booked seats check
+            query = select(BusBooking).where(BusBooking.bus_id == booking_request.bus_id)
+            result = await self.db.execute(query)
+            existing_bookings = result.scalars().all()
+
+            booked_seats = []
+            for booking in existing_bookings:
+                if booking.selected_seats:
+                    booked_seats.extend(booking.selected_seats)
+
+            for seat in booking_request.selected_seats:
+                if seat in booked_seats:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Seat {seat} already booked"
+                    )
+
+            # 💰 pricing
             fare_per_passenger = bus_data.get('price', 0)
             total_amount = round(fare_per_passenger * booking_request.passengers, 2)
-            
+
+            # ✅ create booking
             bus_booking = BusBooking(
                 booking_reference=booking_reference,
                 user_id=user.id,
@@ -413,7 +444,11 @@ class BusBookingService(BaseBookingService):
                 arrival_time=datetime.fromisoformat(bus_data.get('arrival_time', '')),
                 travel_date=datetime.combine(booking_request.travel_date, datetime.min.time()),
                 passengers=booking_request.passengers,
-                passenger_details=[passenger.dict() for passenger in booking_request.passenger_details],
+
+                # ✅ IMPORTANT
+                selected_seats=booking_request.selected_seats,
+
+                passenger_details=[p.dict() for p in booking_request.passenger_details],
                 fare_per_passenger=fare_per_passenger,
                 total_amount=total_amount,
                 payment_method=payment_mode.value,
@@ -423,11 +458,11 @@ class BusBookingService(BaseBookingService):
                 payment_status=PaymentStatus.PENDING,
                 expires_at=self._calculate_expiry_time()
             )
-            
+
             self.db.add(bus_booking)
             await self.db.flush()
-            
-            # Process payment
+
+            # 💳 payment
             payment_result = await self.payment_processor.process_payment(
                 user_id=user.id,
                 amount=total_amount,
@@ -435,37 +470,20 @@ class BusBookingService(BaseBookingService):
                 booking_id=bus_booking.id,
                 booking_type="bus"
             )
-            
+
             if payment_result['status'] == PaymentStatus.SUCCESS:
                 bus_booking.payment_status = PaymentStatus.SUCCESS
                 bus_booking.status = BookingStatus.CONFIRMED
                 bus_booking.ticket_number = self._generate_ticket_number()
-            
+
             await self.db.commit()
             await self.db.refresh(bus_booking)
+
             return bus_booking
-            
+
+        except HTTPException:
+            raise
+
         except Exception as e:
             await self.db.rollback()
             raise HTTPException(status_code=500, detail=str(e))
-
-    async def get_bus_booking(self, booking_id: int, user_id: int) -> Optional[BusBooking]:
-        """Get bus booking with tenant isolation."""
-        query = select(BusBooking).where(
-            and_(BusBooking.id == booking_id, BusBooking.user_id == user_id)
-        )
-        if self.tenant_id:
-            query = query.where(BusBooking.tenant_id == self.tenant_id)
-        result = await self.db.execute(query)
-        return result.scalar_one_or_none()
-
-    async def get_user_bus_bookings(self, user_id: int, skip: int = 0, limit: int = 10, status_filter: Optional[BookingStatus] = None) -> List[BusBooking]:
-        """Get user bus bookings with tenant isolation."""
-        query = select(BusBooking).where(BusBooking.user_id == user_id)
-        if self.tenant_id:
-            query = query.where(BusBooking.tenant_id == self.tenant_id)
-        if status_filter:
-            query = query.where(BusBooking.status == status_filter)
-        query = query.order_by(BusBooking.created_at.desc()).offset(skip).limit(limit)
-        result = await self.db.execute(query)
-        return result.scalars().all()
