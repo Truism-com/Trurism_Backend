@@ -17,6 +17,11 @@ from app.dashboard.models import (
     SocialProvider, AmendmentType, AmendmentStatus,
     QueryType, QueryStatus, ActivityType
 )
+
+from google.oauth2 import id_token as google_id_token
+from google.auth.transport import requests as google_requests
+from app.core.config import settings
+
 from app.dashboard.schemas import (
     UserProfileResponse, UserProfileUpdate, PasswordChangeRequest,
     SocialLoginRequest, SocialAccountResponse, LinkedAccountsResponse,
@@ -131,8 +136,23 @@ async def link_social_account(
     service = DashboardService(db)
     
     # Mock provider verification - in production, call provider APIs
-    provider_user_id = f"{data.provider.value}_{current_user.id}"  # Placeholder
-    provider_email = current_user.email
+    # provider_user_id = f"{data.provider.value}_{current_user.id}"  # Placeholder
+    # provider_email = current_user.email
+    
+    if data.provider.value == "google":
+        try:
+            idinfo = google_id_token.verify_oauth2_token(
+                data.access_token,
+                google_requests.Request(),
+                settings.google_client_id
+            )
+        except ValueError:
+            raise HTTPException(status_code=401,detail="Invalid or Expired google token")
+    else:
+        provider_user_id = f"{data.provider.value}_{current_user.id}"  # 
+        provider_email = current_user.email
+    
+    
     
     account = await service.link_social_account(
         user_id=current_user.id,

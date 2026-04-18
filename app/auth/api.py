@@ -14,6 +14,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Dict, Any
 from datetime import timedelta
 
+from google.oauth2 import id_token as google_id_token
+from google.auth.transport import requests as google_requests
+
 from app.core.database import get_database_session
 from app.core.security import SecurityManager
 from app.auth.models import User
@@ -24,6 +27,8 @@ from app.auth.schemas import (
 )
 from app.auth.services import AuthService
 from app.core.config import settings
+from app.auth.schemas import GoogleLoginRequest
+from app.auth.models import User, UserRole
 
 # Router for authentication endpoints
 router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -371,3 +376,79 @@ async def change_password(
     auth_service = AuthService(db)
     await auth_service.change_password(current_user.id, password_data)
     return {"message": "Password changed successfully"}
+
+@router.post("/google",response_model=TokenResponse)
+async def google_login(
+    data: GoogleLoginRequest,
+    db: AsyncSession = Depends(get_database_session)
+):
+    """
+    login or register user using google oauth
+    verifies the google id token server-side and then returns JWS tokens
+    """
+    
+    # verift the token with google and get user info
+    try:
+        idinfo = google_id_token.verify_oauth2_token(
+            data.id_token,
+            google_requests.Request(),
+            settings.google_client_id
+        )
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired google token",
+        )
+    
+    google_sub = idinfo["sub"]
+    email = idinfo["email"]
+    name = idinfo.get("name", "")
+    
+    # find existinf user or create new one
+    auth_service = AuthService(db)
+    user = await auth_service.get_user_by_email(email)
+    
+    if not user:
+        user = User(
+            email=email,
+            password_hash="",   #no password since it's google auth       
+            name=name or email.split("@")[0],
+            role=UserRole.CUSTOMER,
+            is_active=True,
+            is_verified=True,   #asume google already verified the email      
+        )
+        
+        db.add(user)
+        await db.commit()
+        await db.refresh(user)
+    
+    else:
+        
+        if not user.is_verified:
+            user.is_verified = True
+            await db.commit()
+            
+    # issue JWT tokens
+    token_data = {"sub":str(user.id), "email": user.email, "role":user.role.value}
+    access_token = SecurityManager.create_access_token(
+        data=token_data,
+        expires_delta=timedelta(minutes=setting.access_token_expire_minutes)
+    )
+    refresh_access_token = SecurityManager.create_refresh_token(data=token_data)    
+    
+    try: 
+        from app.core.security import SecurityManager as _SM
+        expires_at = _SM.get_token_expireation(refresh_access_token)
+        if expires_at:
+            await auth_service.create_refresh_token_record(user.id,refresh_access_token, expires_at)
+    except Exception:
+        pass
+    
+    return TokenResponse(
+        access_token=access_token,
+        refresh_token=refresh_access_token,
+        expires_in=settings.access_token_expire_minutes * 60
+    )       
+                
+    
+    

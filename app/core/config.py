@@ -122,6 +122,9 @@ class Settings(BaseSettings):
     razorpay_key_secret: str = ""
     razorpay_webhook_secret: str = ""
     
+    # Google OAuth Settings
+    google_client_id: str = ""  
+    
     # Email Settings
     mail_server: str = "smtp.gmail.com"
     mail_port: int = 587

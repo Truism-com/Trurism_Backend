@@ -192,3 +192,7 @@ class UserListResponse(BaseModel):
     
     class Config:
         from_attributes = True
+
+class GoogleLoginRequest(BaseModel):
+    """Schema for Google OAuth login via ID token."""
+    id_token: str
