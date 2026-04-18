@@ -1,53 +1,26 @@
-# Ignore .env files - Render uses environment variables from dashboard
+# Environment variables (sensitive)
 .env
 .env.*
-!.env.example
 
 # Git files
 .git
 .gitignore
-.gitattributes
 
 # Python cache
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
-.Python
-*.so
-*.egg
-*.egg-info/
-dist/
-build/
 
 # Virtual environments
 venv/
-env/
-ENV/
-.venv
+.env/
+.venv/
 
-# IDE files
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# Testing
-.pytest_cache/
-.coverage
-htmlcov/
-.tox/
-
-# Documentation (optional - remove if you want docs in container)
-docs/
-*.md
-!README.md
-
-# Local database files
-*.db
-*.sqlite
-*.sqlite3
+# Build / distribution files
+build/
+dist/
+*.egg-info/
 
 # Logs
 *.log
@@ -56,15 +29,19 @@ docs/
 .DS_Store
 Thumbs.db
 
-# Development files
-test_*.py
-*_test.py
+# IDE / Editor files
+.vscode/
+.idea/
+
+# Database files
+*.sqlite3
+
+# Node modules (if any frontend exists)
+node_modules/
+
+# Docker files (optional ignore cases)
+Dockerfile
+.dockerignore
+
+# Tests (optional - if not needed in image)
 tests/
-
-# Migration backups
-migrations/versions/*.bak
-
-# Temporary files
-tmp/
-temp/
-*.tmp
