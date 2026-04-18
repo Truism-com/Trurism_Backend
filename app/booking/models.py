@@ -312,3 +312,28 @@ class FlightBookingPassenger(Base):
     seat_number = Column(String(10), nullable=True)
     meal_preference = Column(String(50), nullable=True)
     special_assistance = Column(Text, nullable=True)
+
+class AirportCode(Base, TenantMixin):
+    __tablename__ = "airport_codes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    code = Column(String(3), unique=True, nullable=False, index=True)  # IATA
+    name = Column(String(255), nullable=False)
+    city = Column(String(100), nullable=False)
+    country = Column(String(100), nullable=False)
+    is_active = Column(Boolean, default=True)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+class AirlineCode(Base, TenantMixin):
+    __tablename__ = "airline_codes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    code = Column(String(2), unique=True, nullable=False, index=True)  # IATA
+    name = Column(String(255), nullable=False)
+    logo_url = Column(String, nullable=True)
+    is_active = Column(Boolean, default=True)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())    

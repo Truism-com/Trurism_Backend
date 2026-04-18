@@ -164,3 +164,35 @@ class BusBookingResponse(BookingResponse):
     arrival_time: datetime
     travel_date: datetime
     passengers: int
+
+class AirportCreate(BaseModel):
+    code: str = Field(..., min_length=3, max_length=3)
+    name: str
+    city: str
+    country: str
+
+
+class AirportResponse(BaseModel):
+    id: int
+    code: str
+    name: str
+    city: str
+    country: str
+    is_active: bool
+
+    model_config = ConfigDict(from_attributes=True)
+
+class AirlineCreate(BaseModel):
+    code: str = Field(..., min_length=2, max_length=2)
+    name: str
+    logo_url: Optional[str] = None
+
+
+class AirlineResponse(BaseModel):
+    id: int
+    code: str
+    name: str
+    logo_url: Optional[str]
+    is_active: bool
+
+    model_config = ConfigDict(from_attributes=True)        

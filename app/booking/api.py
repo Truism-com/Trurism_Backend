@@ -24,7 +24,9 @@ from app.booking.schemas import (
 )
 from app.booking.services import FlightBookingService, HotelBookingService, BusBookingService
 from app.booking.models import BookingStatus
-
+from app.booking.models import AirportCode, AirlineCode
+from app.booking.schemas import AirportResponse, AirlineResponse
+from sqlalchemy import select
 
 # Router for booking endpoints
 router = APIRouter(prefix="/bookings", tags=["Bookings"])
@@ -532,3 +534,16 @@ async def cancel_booking(
         )
     
     
+@router.get("/settings/airports", response_model=List[AirportResponse])
+async def get_airports(db: AsyncSession = Depends(get_database_session)):
+    result = await db.execute(
+        select(AirportCode).where(AirportCode.is_active == True)
+    )
+    return result.scalars().all()
+
+@router.get("/settings/airlines", response_model=List[AirlineResponse])
+async def get_airlines(db: AsyncSession = Depends(get_database_session)):
+    result = await db.execute(
+        select(AirlineCode).where(AirlineCode.is_active == True)
+    )
+    return result.scalars().all()
