@@ -52,6 +52,7 @@ from app.pricing.api import router as pricing_router, admin_router as pricing_ad
 from app.company.api import router as company_router
 from app.files.api import router as files_router
 from app.tenant.middleware import TenantMiddleware
+from app.newsletter.api import router as newsletter_router
 
 
 # Configure logging
@@ -445,6 +446,7 @@ app.include_router(pricing_router)
 app.include_router(pricing_admin_router)
 app.include_router(company_router)
 app.include_router(files_router)
+app.include_router(newsletter_router)
 
 # Initialize openapi_tags if not exists
 if app.openapi_tags is None:

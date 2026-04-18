@@ -137,6 +137,7 @@ async def init_database():
         import app.cms.models  # noqa: F401
         import app.hotels.models  # noqa: F401
         import app.company.models  # noqa: F401
+        import app.newsletter.models
         
         # Create all tables
         await conn.run_sync(Base.metadata.create_all)
