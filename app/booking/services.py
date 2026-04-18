@@ -194,7 +194,7 @@ class FlightBookingService(BaseBookingService):
             # Send booking confirmation email (non-blocking)
             if flight_booking.status == BookingStatus.CONFIRMED:
                 try:
-                    await email_service.send_booking_confirmation(
+                    email_sent = await email_service.send_booking_confirmation(
                         to_email=user.email,
                         booking_reference=booking_reference,
                         service_type="Flight",
@@ -202,7 +202,10 @@ class FlightBookingService(BaseBookingService):
                         amount=flight_booking.total_amount,
                         passenger_name=user.name,
                     )
-                    logger.info(f"Flight booking email sent: {user.email}")
+                    if email_sent:
+                        logger.info(f"Flight booking email sent: {user.email}")
+                    else:
+                        logger.warning(f"Flight booking email not sent: {user.email}")
                 except Exception as email_err:
                     logger.warning(f"Flight booking email failed: {email_err}")
 
