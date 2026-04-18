@@ -363,7 +363,7 @@ class HotelBookingService(BaseBookingService):
             # Send booking confirmation email (non-blocking)
             if hotel_booking.status == BookingStatus.CONFIRMED:
                 try:
-                    await email_service.send_booking_confirmation(
+                    email_sent = await email_service.send_booking_confirmation(
                         to_email=user.email,
                         booking_reference=booking_reference,
                         service_type="Hotel",
@@ -371,7 +371,10 @@ class HotelBookingService(BaseBookingService):
                         amount=hotel_booking.total_amount,
                         passenger_name=user.name,
                     )
-                    logger.info(f"hotel booking email sent:{user.email}")
+                    if email_sent:
+                        logger.info(f"hotel booking email sent:{user.email}")
+                    else:
+                        logger.warning(f"Hotel booking email not sent: {user.email}")
                 except Exception as email_err:
                     logger.warning(f"Hotel booking email failed: {email_err}")
 
