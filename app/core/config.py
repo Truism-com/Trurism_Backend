@@ -31,6 +31,18 @@ class Settings(BaseSettings):
     # CORS and Security Settings (comma-separated strings, parsed in main.py)
     cors_origins: str = "http://localhost:3000,http://localhost:8000"
     trusted_hosts: str = "localhost,127.0.0.1"
+
+    @field_validator("cors_origins")
+    @classmethod
+    def validate_cors_origins(cls, v: str, info) -> str:
+        """Reject wildcard CORS origins in production to prevent credential theft."""
+        env = info.data.get("environment", "development")
+        if env == "production" and v.strip() == "*":
+            raise ValueError(
+                "CORS wildcard origin '*' is not allowed in production. "
+                "Set CORS_ORIGINS to explicit frontend domain(s) to prevent credential theft."
+            )
+        return v
     
     # Request Size Limits
     max_request_body_size: int = 10 * 1024 * 1024  # 10MB
@@ -82,7 +94,7 @@ class Settings(BaseSettings):
     # JWT Settings
     jwt_secret_key: str = ""
     jwt_algorithm: str = "HS256"
-    access_token_expire_minutes: int = 15
+    access_token_expire_minutes: int = 5  # Reduced from 15 to 5 minutes as compensating control for Redis-unavailable token blacklist
     refresh_token_expire_days: int = 7
     
     # Rate Limiting

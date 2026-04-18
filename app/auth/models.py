@@ -126,3 +126,19 @@ class RefreshToken(Base, TenantMixin):
 
     # relationship back to user (optional foreign key relationship is handled by migrations)
     user = relationship("User", back_populates="refresh_tokens")
+
+
+class TokenBlacklist(Base):
+    """
+    Token blacklist model for revoking tokens when Redis is unavailable.
+
+    Stores blacklisted access tokens (mainly for logout) as a database fallback
+    when Redis is not configured. This ensures logout works even without Redis.
+    """
+    __tablename__ = "token_blacklist"
+
+    id = Column(Integer, primary_key=True, index=True)
+    token_jti = Column(String(500), unique=True, nullable=False, index=True)  # Token identifier
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)  # Optional, for audit trail
+    expires_at = Column(DateTime(timezone=True), nullable=False, index=True)  # When token naturally expires
+    blacklisted_at = Column(DateTime(timezone=True), server_default=func.now())  # When it was blacklisted

@@ -186,12 +186,17 @@ if settings.cors_origins.strip() == "*":
     cors_origins = ["*"]
 else:
     cors_origins = [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
+
+# Restrict HTTP methods and headers for better security
+cors_methods = ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"]
+cors_headers = ["Authorization", "Content-Type", "X-Tenant-ID", "X-Tenant-Code"]
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_credentials=True if cors_origins != ["*"] else False,  # Never allow credentials with wildcard
+    allow_methods=cors_methods,
+    allow_headers=cors_headers,
 )
 
 # Add tenant middleware for white-label support
@@ -233,6 +238,13 @@ async def add_security_headers(request: Request, call_next):
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["X-XSS-Protection"] = "1; mode=block"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=(), usb=()"
+
+    # Add Cache-Control for authenticated endpoints to prevent sensitive data caching
+    if request.headers.get("Authorization"):
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+
     if settings.environment == "production":
         response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     return response
