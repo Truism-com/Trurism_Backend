@@ -54,6 +54,7 @@ from app.files.api import router as files_router
 from app.tenant.middleware import TenantMiddleware
 from app.newsletter.api import router as newsletter_router
 from app.feedback.api import router as feedback_router
+from app.settings.api import router as settings_router
 
 
 # Configure logging
@@ -449,6 +450,7 @@ app.include_router(company_router)
 app.include_router(files_router)
 app.include_router(newsletter_router)
 app.include_router(feedback_router)
+app.include_router(settings_router)
 
 # Initialize openapi_tags if not exists
 if app.openapi_tags is None:

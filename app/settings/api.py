@@ -7,7 +7,7 @@ REST API for admin settings and staff management.
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional
-
+from app.settings.schemas import AirportCreate, AirportUpdate, AirlineCreate, AirlineUpdate
 from app.core.database import get_db
 from app.auth.api import get_current_user, get_current_admin_user
 from app.auth.models import User
@@ -528,3 +528,86 @@ async def seed_settings(
     service = SettingsService(db)
     await service.seed_default_settings()
     return {"message": "Default settings seeded"}
+
+# =============================================================================
+# AIRPORT & AIRLINE ENDPOINTS
+# =============================================================================
+
+# AIRPORT
+@router.post("/airports")
+async def create_airport(
+    data: AirportCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_admin_user)
+):
+    return await SettingsService(db).create_airport(data)
+
+
+@router.get("/airports")
+async def get_airports(db: AsyncSession = Depends(get_db)):
+    return await SettingsService(db).get_airports()
+
+
+@router.put("/airports/{code}")
+async def update_airport(
+    code: str,
+    data: AirportUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_admin_user)
+):
+    obj = await SettingsService(db).update_airport(code, data)
+    if not obj:
+        raise HTTPException(status_code=404, detail="Airport not found")
+    return obj
+
+
+@router.delete("/airports/{code}")
+async def delete_airport(
+    code: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_admin_user)
+):
+    obj = await SettingsService(db).delete_airport(code)
+    if not obj:
+        raise HTTPException(status_code=404, detail="Airport not found")
+    return {"message": "Deleted"}
+
+
+# AIRLINE
+@router.post("/airlines")
+async def create_airline(
+    data: AirlineCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_admin_user)
+):
+    return await SettingsService(db).create_airline(data)
+
+
+@router.get("/airlines")
+async def get_airlines(db: AsyncSession = Depends(get_db)):
+    return await SettingsService(db).get_airlines()
+
+
+@router.put("/airlines/{code}")
+async def update_airline(
+    code: str,
+    data: AirlineUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_admin_user)
+):
+    obj = await SettingsService(db).update_airline(code, data)
+    if not obj:
+        raise HTTPException(status_code=404, detail="Airline not found")
+    return obj
+
+
+@router.delete("/airlines/{code}")
+async def delete_airline(
+    code: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_admin_user)
+):
+    obj = await SettingsService(db).delete_airline(code)
+    if not obj:
+        raise HTTPException(status_code=404, detail="Airline not found")
+    return {"message": "Deleted"}

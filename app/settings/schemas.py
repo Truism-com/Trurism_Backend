@@ -303,3 +303,52 @@ class SettingsByCategory(BaseModel):
 class PublicSettingsResponse(BaseModel):
     """Public settings for frontend."""
     settings: Dict[str, Any]
+
+
+# AIRPORT
+class AirportCreate(BaseModel):
+    code: str
+    name: str
+    city: str
+    country: str
+
+
+class AirportUpdate(BaseModel):
+    name: Optional[str] = None
+    city: Optional[str] = None
+    country: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
+class AirportResponse(BaseModel):
+    code: str
+    name: str
+    city: str
+    country: str
+    is_active: bool
+
+    class Config:
+        from_attributes = True
+
+
+# AIRLINE
+class AirlineCreate(BaseModel):
+    code: str
+    name: str
+    logo_url: Optional[str] = None
+
+
+class AirlineUpdate(BaseModel):
+    name: Optional[str] = None
+    logo_url: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
+class AirlineResponse(BaseModel):
+    code: str
+    name: str
+    logo_url: Optional[str]
+    is_active: bool
+
+    class Config:
+        from_attributes = True
