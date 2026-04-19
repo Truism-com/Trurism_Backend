@@ -225,3 +225,21 @@ class SystemSetting(Base):
 
 # Import for type hints
 from app.auth.models import User
+
+class AirportCode(Base):
+    __tablename__ = "airport_codes"
+
+    code = Column(String(3), primary_key=True, unique=True, index=True)
+    name = Column(String, nullable=False)
+    city = Column(String, nullable=False)
+    country = Column(String, nullable=False)
+    is_active = Column(Boolean, default=True)
+
+
+class AirlineCode(Base):
+    __tablename__ = "airline_codes"
+
+    code = Column(String(2), primary_key=True, unique=True, index=True)
+    name = Column(String, nullable=False)
+    logo_url = Column(String, nullable=True)
+    is_active = Column(Boolean, default=True)

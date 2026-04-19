@@ -12,7 +12,7 @@ from datetime import datetime
 
 from app.settings.models import (
     ConvenienceFee, StaffRole, StaffPermission, StaffMember,
-    SystemSetting, PaymentMode
+    SystemSetting, PaymentMode, AirportCode, AirlineCode
 )
 from app.settings.schemas import (
     ConvenienceFeeCreate, ConvenienceFeeUpdate,
@@ -21,7 +21,8 @@ from app.settings.schemas import (
     StaffRoleCreate, StaffRoleUpdate,
     StaffMemberCreate, StaffMemberUpdate,
     SystemSettingCreate, SystemSettingUpdate,
-    PermissionsByModule, SettingsByCategory
+    PermissionsByModule, SettingsByCategory,
+    StaffPermissionResponse, SystemSettingResponse
 )
 
 
@@ -243,8 +244,6 @@ class SettingsService:
             if perm.module not in modules:
                 modules[perm.module] = []
             modules[perm.module].append(perm)
-        
-        from app.settings.schemas import StaffPermissionResponse
         
         return [
             PermissionsByModule(
@@ -699,8 +698,8 @@ class SettingsService:
         update_data = data.model_dump(exclude_unset=True)
         update_data['updated_by_id'] = updated_by_id
         
-        for key, value in update_data.items():
-            setattr(setting, key, value)
+        for key_name, value in update_data.items():
+            setattr(setting, key_name, value)
         
         await self.db.commit()
         await self.db.refresh(setting)
@@ -787,8 +786,6 @@ class SettingsService:
                 categories[setting.category] = []
             categories[setting.category].append(setting)
         
-        from app.settings.schemas import SystemSettingResponse
-        
         return [
             SettingsByCategory(
                 category=category,
@@ -865,3 +862,46 @@ class SettingsService:
                 self.db.add(setting)
         
         await self.db.commit()
+
+    # =========================
+    # AIRPORT METHODS
+    # =========================
+    async def create_airport(self, data):
+        obj = AirportCode(**data.model_dump())
+        self.db.add(obj)
+        await self.db.commit()
+        await self.db.refresh(obj)
+        return obj
+
+    async def get_airports(self):
+        result = await self.db.execute(
+            select(AirportCode).where(AirportCode.is_active == True)
+        )
+        return result.scalars().all()
+
+    async def update_airport(self, code, data):
+        result = await self.db.execute(
+            select(AirportCode).where(AirportCode.code == code)
+        )
+        obj = result.scalar_one_or_none()
+        if not obj:
+            return None
+
+        for k, v in data.model_dump(exclude_unset=True).items():
+            setattr(obj, k, v)
+
+        await self.db.commit()
+        await self.db.refresh(obj)
+        return obj
+
+    async def delete_airport(self, code):
+        result = await self.db.execute(
+            select(AirportCode).where(AirportCode.code == code)
+        )
+        obj = result.scalar_one_or_none()
+        if not obj:
+            return False
+        
+        await self.db.delete(obj)
+        await self.db.commit()
+        return True

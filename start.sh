@@ -1,20 +1,22 @@
 #!/bin/sh
 set -e
 
-# Wait for database to be ready (optional but recommended)
+echo "Starting container..."
+
+# Wait for database
 echo "Waiting for database to be ready..."
 sleep 5
 
-# Run database migrations
-echo "Running database migrations..."
-if alembic upgrade head; then
-    echo "Database migrations completed successfully"
+# Run migrations
+echo "$(date) - Running database migrations..."
+
+if timeout 60 alembic upgrade head; then
+    echo "$(date) - Database migrations completed successfully"
 else
-    echo "WARNING: Database migrations failed. Attempting to continue..."
-    # Don't exit - let the app try to start anyway
+    echo "$(date) - WARNING: Database migrations failed or timed out after 60s."
+    echo "Attempting to start the application anyway..."
 fi
 
-# Start the application
+# Start FastAPI
 echo "Starting FastAPI application..."
 exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1
-

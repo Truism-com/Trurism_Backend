@@ -9,6 +9,7 @@ This module contains business logic for booking operations:
 - Booking status updates and cancellations
 """
 
+import logging
 import uuid
 import asyncio
 import random
@@ -16,7 +17,7 @@ from datetime import datetime, timedelta
 from typing import List, Optional, Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, and_
-from fastapi import HTTPException, status
+from fastapi import HTTPException, logger, status
 
 from app.booking.models import (
     FlightBooking, HotelBooking, BusBooking, PassengerInfo,
@@ -28,6 +29,9 @@ from app.booking.schemas import (
 )
 from app.auth.models import User
 from app.core.config import settings
+
+from app.services.email import email_service
+logger = logging.getLogger(__name__)
 
 
 class BaseBookingService:
@@ -150,7 +154,12 @@ class FlightBookingService(BaseBookingService):
                 special_requests=booking_request.special_requests,
                 status=BookingStatus.PENDING,
                 payment_status=PaymentStatus.PENDING,
-                expires_at=self._calculate_expiry_time()
+                expires_at=self._calculate_expiry_time(),
+                # ── Compliance fields ──────────────────────────────────────
+                gst_number=booking_request.gst_number,
+                gst_company_name=booking_request.gst_company_name,
+                passport_number=booking_request.passport_number,
+                passport_expiry=booking_request.passport_expiry,
             )
             
             self.db.add(flight_booking)
@@ -181,7 +190,25 @@ class FlightBookingService(BaseBookingService):
             
             await self.db.commit()
             await self.db.refresh(flight_booking)
-            
+
+            # Send booking confirmation email (non-blocking)
+            if flight_booking.status == BookingStatus.CONFIRMED:
+                try:
+                    email_sent = await email_service.send_booking_confirmation(
+                        to_email=user.email,
+                        booking_reference=booking_reference,
+                        service_type="Flight",
+                        travel_date=str(flight_booking.departure_time.date()),
+                        amount=flight_booking.total_amount,
+                        passenger_name=user.name,
+                    )
+                    if email_sent:
+                        logger.info(f"Flight booking email sent: {user.email}")
+                    else:
+                        logger.warning(f"Flight booking email not sent: {user.email}")
+                except Exception as email_err:
+                    logger.warning(f"Flight booking email failed: {email_err}")
+
             return flight_booking
             
         except Exception as e:
@@ -310,7 +337,12 @@ class HotelBookingService(BaseBookingService):
                 payment_method=payment_mode.value,
                 status=BookingStatus.PENDING,
                 payment_status=PaymentStatus.PENDING,
-                expires_at=self._calculate_expiry_time()
+                expires_at=self._calculate_expiry_time(),
+                # ── Compliance fields ──────────────────────────────────────
+                gst_number=booking_request.gst_number,
+                gst_company_name=booking_request.gst_company_name,
+                passport_number=booking_request.passport_number,
+                passport_expiry=booking_request.passport_expiry,
             )
             
             self.db.add(hotel_booking)
@@ -332,6 +364,25 @@ class HotelBookingService(BaseBookingService):
             
             await self.db.commit()
             await self.db.refresh(hotel_booking)
+
+            # Send booking confirmation email (non-blocking)
+            if hotel_booking.status == BookingStatus.CONFIRMED:
+                try:
+                    email_sent = await email_service.send_booking_confirmation(
+                        to_email=user.email,
+                        booking_reference=booking_reference,
+                        service_type="Hotel",
+                        travel_date=str(hotel_booking.checkin_date.date()),
+                        amount=hotel_booking.total_amount,
+                        passenger_name=user.name,
+                    )
+                    if email_sent:
+                        logger.info(f"hotel booking email sent:{user.email}")
+                    else:
+                        logger.warning(f"Hotel booking email not sent: {user.email}")
+                except Exception as email_err:
+                    logger.warning(f"Hotel booking email failed: {email_err}")
+
             return hotel_booking
             
         except Exception as e:
@@ -421,7 +472,12 @@ class BusBookingService(BaseBookingService):
                 dropping_point=booking_request.dropping_point,
                 status=BookingStatus.PENDING,
                 payment_status=PaymentStatus.PENDING,
-                expires_at=self._calculate_expiry_time()
+                expires_at=self._calculate_expiry_time(),
+                # ── Compliance fields ──────────────────────────────────────
+                gst_number=booking_request.gst_number,
+                gst_company_name=booking_request.gst_company_name,
+                passport_number=booking_request.passport_number,
+                passport_expiry=booking_request.passport_expiry,
             )
             
             self.db.add(bus_booking)
@@ -443,6 +499,22 @@ class BusBookingService(BaseBookingService):
             
             await self.db.commit()
             await self.db.refresh(bus_booking)
+
+            # Send booking confirmation email (non-blocking)
+            if bus_booking.status == BookingStatus.CONFIRMED:
+                try:
+                    await email_service.send_booking_confirmation(
+                        to_email=user.email,
+                        booking_reference=booking_reference,
+                        service_type="Bus",
+                        travel_date=str(bus_booking.travel_date.date()),
+                        amount=bus_booking.total_amount,
+                        passenger_name=user.name,
+                    )
+                    logger.info(f"Bus booking confirmation email sent: {user.email} ")
+                except Exception as email_err:
+                    logger.warning(f"Bus booking email failed: {email_err}")
+
             return bus_booking
             
         except Exception as e:
