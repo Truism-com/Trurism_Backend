@@ -9,7 +9,7 @@ This module defines the database models for booking operations:
 - Payment and transaction models
 """
 
-from sqlalchemy import Column, Integer, String, DateTime, Boolean, Text, Float, JSON, ForeignKey, Enum
+from sqlalchemy import Column, Integer, String, DateTime, Boolean, Text, Float, JSON, ForeignKey, Enum, Date
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 import enum
@@ -163,6 +163,12 @@ class FlightBooking(Base, TenantMixin):
     cancellation_reason = Column(Text, nullable=True)
     refund_amount = Column(Float, nullable=True)
     
+    # ── Compliance fields ──────────────────────────────────────────────────
+    gst_number = Column(String(15), nullable=True, comment="GST registration number (15-char)")
+    gst_company_name = Column(String(255), nullable=True, comment="Company name under GST")
+    passport_number = Column(String(20), nullable=True, comment="Primary traveller passport number")
+    passport_expiry = Column(Date, nullable=True, comment="Primary traveller passport expiry date")
+
     # Audit fields
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
@@ -226,6 +232,12 @@ class HotelBooking(Base, TenantMixin):
     cancellation_reason = Column(Text, nullable=True)
     refund_amount = Column(Float, nullable=True)
     cancellation_policy = Column(String(100), nullable=True)
+
+    # ── Compliance fields ──────────────────────────────────────────────────
+    gst_number = Column(String(15), nullable=True, comment="GST registration number (15-char)")
+    gst_company_name = Column(String(255), nullable=True, comment="Company name under GST")
+    passport_number = Column(String(20), nullable=True, comment="Primary guest passport number")
+    passport_expiry = Column(Date, nullable=True, comment="Primary guest passport expiry date")
     
     # Audit fields
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -288,6 +300,12 @@ class BusBooking(Base, TenantMixin):
     special_requests = Column(Text, nullable=True)
     cancellation_reason = Column(Text, nullable=True)
     refund_amount = Column(Float, nullable=True)
+
+    # ── Compliance fields ──────────────────────────────────────────────────
+    gst_number = Column(String(15), nullable=True, comment="GST registration number (15-char)")
+    gst_company_name = Column(String(255), nullable=True, comment="Company name under GST")
+    passport_number = Column(String(20), nullable=True, comment="Primary passenger passport number")
+    passport_expiry = Column(Date, nullable=True, comment="Primary passenger passport expiry date")
     
     # Audit fields
     created_at = Column(DateTime(timezone=True), server_default=func.now())
