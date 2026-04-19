@@ -52,6 +52,7 @@ from app.pricing.api import router as pricing_router, admin_router as pricing_ad
 from app.company.api import router as company_router
 from app.files.api import router as files_router
 from app.tenant.middleware import TenantMiddleware
+from app.newsletter.api import router as newsletter_router
 
 
 # Configure logging
@@ -101,7 +102,8 @@ async def lifespan(app: FastAPI):
         else:
             logger.info("Skipping database health check due to SKIP_DB_INIT env var")
     except Exception as e:
-        logger.error(f"Database initialization failed (non-fatal): {e}")
+        logger.error(f"Database initialization failed: {e}")
+        logger.error("HINT: If this is on Azure, check if 'Allow Azure Services' is enabled in your Database Networking settings.")
         logger.error("API will start but database-dependent endpoints will not work")
     
     # Check Redis (if configured) - Non-blocking, optional service
@@ -185,12 +187,17 @@ if settings.cors_origins.strip() == "*":
     cors_origins = ["*"]
 else:
     cors_origins = [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
+
+# Restrict HTTP methods and headers for better security
+cors_methods = ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"]
+cors_headers = ["Authorization", "Content-Type", "X-Tenant-ID", "X-Tenant-Code"]
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_credentials=True if cors_origins != ["*"] else False,  # Never allow credentials with wildcard
+    allow_methods=cors_methods,
+    allow_headers=cors_headers,
 )
 
 # Add tenant middleware for white-label support
@@ -232,6 +239,13 @@ async def add_security_headers(request: Request, call_next):
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["X-XSS-Protection"] = "1; mode=block"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=(), usb=()"
+
+    # Add Cache-Control for authenticated endpoints to prevent sensitive data caching
+    if request.headers.get("Authorization"):
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+
     if settings.environment == "production":
         response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     return response
@@ -432,6 +446,7 @@ app.include_router(pricing_router)
 app.include_router(pricing_admin_router)
 app.include_router(company_router)
 app.include_router(files_router)
+app.include_router(newsletter_router)
 
 # Initialize openapi_tags if not exists
 if app.openapi_tags is None:
