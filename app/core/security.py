@@ -5,7 +5,7 @@ This module provides security-related functionality including:
 - JWT token generation and validation
 - Password hashing and verification
 - Role-based access control
-- Token blacklisting for logout functionality
+- Token blacklisting for logout functionality (Redis + Database fallback)
 """
 
 from datetime import datetime, timedelta
@@ -16,11 +16,16 @@ from fastapi import HTTPException, status
 import redis.asyncio as aioredis
 import json
 import hashlib
+import logging
 
 from app.core.config import settings
 
+logger = logging.getLogger(__name__)
+
 # Password hashing context
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# Use pbkdf2_sha256 as primary to avoid bcrypt versioning issues on Azure/Windows.
+# Retain bcrypt for backward compatibility with existing hashes.
+pwd_context = CryptContext(schemes=["pbkdf2_sha256", "bcrypt"], deprecated="auto")
 
 
 async def _get_redis_client():
@@ -141,9 +146,29 @@ class SecurityManager:
 
             return payload
 
-        except (jwt.JWTError, jwt.JWTClaimsError, jwt.ExpiredSignatureError, Exception) as e:
-            if isinstance(e, HTTPException):
-                raise
+        except HTTPException:
+            # Re-raise HTTPExceptions (our custom errors)
+            raise
+        except jwt.ExpiredSignatureError:
+            # Specific handling for expired tokens
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Token has expired",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        except jwt.JWTError as jwt_err:
+            # Specific handling for JWT errors
+            import logging
+            logging.debug(f"JWT validation error: {str(jwt_err)}")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Could not validate credentials",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        except Exception as e:
+            # Catch any other unforeseen errors
+            import logging
+            logging.error(f"Unexpected error during token verification: {str(e)}", exc_info=True)
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Could not validate credentials",
@@ -153,58 +178,87 @@ class SecurityManager:
     @staticmethod
     async def blacklist_token(token: str, expires_at: datetime) -> None:
         """
-        Add a token to the blacklist.
-        
+        Add a token to the blacklist (Redis primary, database fallback).
+
         Args:
             token (str): Token to blacklist
             expires_at (datetime): When the token would naturally expire
         """
-        # Store token in Redis with expiration (ttl in seconds)
-        try:
-            ttl = int((expires_at - datetime.utcnow()).total_seconds())
-            if ttl <= 0:
-                ttl = 1
-        except Exception:
-            ttl = None
-
-        key = f"blacklist:{token}"
+        # Try Redis first
         client = await _get_redis_client()
-        if client is None:
-            # Redis not configured, skip blacklisting
-            return
+        if client is not None:
+            try:
+                ttl = int((expires_at - datetime.utcnow()).total_seconds())
+                if ttl <= 0:
+                    ttl = 1
+
+                key = f"blacklist:{token}"
+                if ttl:
+                    await client.setex(key, ttl, "true")
+                else:
+                    await client.set(key, "true")
+                return
+            except Exception as e:
+                logger.warning(f"Redis blacklist failed, falling back to database: {e}")
+            finally:
+                await client.aclose()
+
+        # Database fallback when Redis unavailable
         try:
-            if ttl:
-                await client.setex(key, ttl, "true")
-            else:
-                # fallback: set without expiry
-                await client.set(key, "true")
-        finally:
-            await client.aclose()
-    
+            from app.auth.models import TokenBlacklist
+            from app.core.database import async_session
+
+            async with async_session() as session:
+                # Hash the token for security before storing
+                token_hash = hashlib.sha256(token.encode()).hexdigest()
+                blacklist_entry = TokenBlacklist(
+                    token_jti=token_hash,
+                    expires_at=expires_at
+                )
+                session.add(blacklist_entry)
+                await session.commit()
+        except Exception as e:
+            logger.error(f"Failed to blacklist token in database: {e}", exc_info=True)
+
     @staticmethod
     async def is_token_blacklisted(token: str) -> bool:
         """
-        Check if a token is blacklisted.
-        
-        Args:
-            token (str): Token to check
-            
+        Check if a token is blacklisted (Redis primary, database fallback).
+
         Returns:
             bool: True if token is blacklisted, False otherwise
         """
+        # Try Redis first
         try:
             client = await _get_redis_client()
-            if client is None:
-                # Redis not configured, fail open (do not block valid tokens)
-                return False
-            try:
-                result = await client.exists(f"blacklist:{token}")
-                return result > 0
-            finally:
-                await client.aclose()
-        except Exception:
-            # If Redis is unavailable, fail open (do not block valid tokens)
-            return False
+            if client is not None:
+                try:
+                    result = await client.exists(f"blacklist:{token}")
+                    return result > 0
+                finally:
+                    await client.aclose()
+        except Exception as e:
+            logger.warning(f"Redis blacklist check failed: {e}")
+
+        # Database fallback when Redis unavailable
+        try:
+            from app.auth.models import TokenBlacklist
+            from app.core.database import async_session
+            from sqlalchemy import select
+
+            token_hash = hashlib.sha256(token.encode()).hexdigest()
+
+            async with async_session() as session:
+                stmt = select(TokenBlacklist).where(
+                    TokenBlacklist.token_jti == token_hash,
+                    TokenBlacklist.expires_at > datetime.utcnow()  # Not expired
+                )
+                result = await session.execute(stmt)
+                return result.scalars().first() is not None
+        except Exception as e:
+            logger.warning(f"Database blacklist check failed, failing secure (rejecting token): {e}")
+            # Fail secure: if we can't check the blacklist, reject the token to prevent reuse of stolen tokens
+            return True
     
     @staticmethod
     def get_token_expiration(token: str) -> Optional[datetime]:
