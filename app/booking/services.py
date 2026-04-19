@@ -154,7 +154,12 @@ class FlightBookingService(BaseBookingService):
                 special_requests=booking_request.special_requests,
                 status=BookingStatus.PENDING,
                 payment_status=PaymentStatus.PENDING,
-                expires_at=self._calculate_expiry_time()
+                expires_at=self._calculate_expiry_time(),
+                # ── Compliance fields ──────────────────────────────────────
+                gst_number=booking_request.gst_number,
+                gst_company_name=booking_request.gst_company_name,
+                passport_number=booking_request.passport_number,
+                passport_expiry=booking_request.passport_expiry,
             )
             
             self.db.add(flight_booking)
@@ -182,11 +187,6 @@ class FlightBookingService(BaseBookingService):
             else:
                 flight_booking.payment_status = PaymentStatus.FAILED
                 flight_booking.status = BookingStatus.PENDING
-            
-            # if BookingStatus.CONFIRMED:
-            #   send_confirmation_email()
-                
-                
             
             await self.db.commit()
             await self.db.refresh(flight_booking)
@@ -337,7 +337,12 @@ class HotelBookingService(BaseBookingService):
                 payment_method=payment_mode.value,
                 status=BookingStatus.PENDING,
                 payment_status=PaymentStatus.PENDING,
-                expires_at=self._calculate_expiry_time()
+                expires_at=self._calculate_expiry_time(),
+                # ── Compliance fields ──────────────────────────────────────
+                gst_number=booking_request.gst_number,
+                gst_company_name=booking_request.gst_company_name,
+                passport_number=booking_request.passport_number,
+                passport_expiry=booking_request.passport_expiry,
             )
             
             self.db.add(hotel_booking)
@@ -467,7 +472,12 @@ class BusBookingService(BaseBookingService):
                 dropping_point=booking_request.dropping_point,
                 status=BookingStatus.PENDING,
                 payment_status=PaymentStatus.PENDING,
-                expires_at=self._calculate_expiry_time()
+                expires_at=self._calculate_expiry_time(),
+                # ── Compliance fields ──────────────────────────────────────
+                gst_number=booking_request.gst_number,
+                gst_company_name=booking_request.gst_company_name,
+                passport_number=booking_request.passport_number,
+                passport_expiry=booking_request.passport_expiry,
             )
             
             self.db.add(bus_booking)

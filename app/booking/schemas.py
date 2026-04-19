@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field, field_validator, ConfigDict
 from typing import Optional, List, Dict, Any
 from datetime import datetime, date
 from enum import Enum
+import re
 
 from app.booking.models import BookingStatus, PaymentMethod, PaymentStatus, PassengerType
 
@@ -87,6 +88,52 @@ class PaymentDetailsSchema(BaseModel):
         return v
 
 
+# ─── GST / Passport validators (reusable) ────────────────────────────────────
+
+GST_PATTERN = re.compile(
+    r'^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$'
+)
+PASSPORT_PATTERN = re.compile(
+    r'^[A-PR-WY][1-9]\d\s?\d{4}[1-9]$'
+)
+
+
+def validate_gst_number(v: Optional[str]) -> Optional[str]:
+    """
+    Validate GST number format.
+    Must be 15-character alphanumeric as per Indian GST standards.
+    Example: 22AAAAA0000A1Z5
+    """
+    if v is None:
+        return v
+    v = v.strip().upper()
+    if not GST_PATTERN.match(v):
+        raise ValueError(
+            'Invalid GST number. Must be 15-character alphanumeric '
+            '(e.g., 22AAAAA0000A1Z5)'
+        )
+    return v
+
+
+def validate_passport_number(v: Optional[str]) -> Optional[str]:
+    """
+    Validate passport number format.
+    Indian passport: 1 letter + 7 digits (e.g., A1234567).
+    International passports follow similar patterns.
+    """
+    if v is None:
+        return v
+    v = v.strip().upper()
+    if not PASSPORT_PATTERN.match(v):
+        raise ValueError(
+            'Invalid passport number format '
+            '(e.g., A1234567)'
+        )
+    return v
+
+
+# ─── Flight Booking ───────────────────────────────────────────────────────────
+
 class FlightBookingRequest(BaseModel):
     """
     Schema for flight booking requests.
@@ -100,7 +147,28 @@ class FlightBookingRequest(BaseModel):
     special_requests: Optional[str] = Field(None, max_length=500, description="Special requests or preferences")
     contact_email: str = Field(..., description="Contact email for booking confirmation")
     contact_phone: str = Field(..., min_length=10, max_length=20, description="Contact phone number")
-    
+
+    # ── Compliance fields ──────────────────────────────────────────────────
+    gst_number: Optional[str] = Field(
+        None,
+        max_length=15,
+        description="GST number for business bookings (15-char alphanumeric)"
+    )
+    gst_company_name: Optional[str] = Field(
+        None,
+        max_length=255,
+        description="Company name registered under GST"
+    )
+    passport_number: Optional[str] = Field(
+        None,
+        max_length=20,
+        description="Passport number of primary traveller (for international flights)"
+    )
+    passport_expiry: Optional[date] = Field(
+        None,
+        description="Passport expiry date of primary traveller"
+    )
+
     @field_validator('passengers')
     @classmethod
     def validate_passengers(cls, v: List[PassengerSchema]) -> List[PassengerSchema]:
@@ -118,6 +186,18 @@ class FlightBookingRequest(BaseModel):
         
         return v
 
+    @field_validator('gst_number')
+    @classmethod
+    def _validate_gst_number(cls, v: Optional[str]) -> Optional[str]:
+        return validate_gst_number(v)
+
+    @field_validator('passport_number')
+    @classmethod
+    def _validate_passport_number(cls, v: Optional[str]) -> Optional[str]:
+        return validate_passport_number(v)
+
+
+# ─── Hotel Booking ────────────────────────────────────────────────────────────
 
 class HotelBookingRequest(BaseModel):
     """
@@ -137,7 +217,28 @@ class HotelBookingRequest(BaseModel):
     special_requests: Optional[str] = Field(None, max_length=500, description="Special requests")
     contact_email: str = Field(..., description="Contact email for booking confirmation")
     contact_phone: str = Field(..., min_length=10, max_length=20, description="Contact phone number")
-    
+
+    # ── Compliance fields ──────────────────────────────────────────────────
+    gst_number: Optional[str] = Field(
+        None,
+        max_length=15,
+        description="GST number for business bookings (15-char alphanumeric)"
+    )
+    gst_company_name: Optional[str] = Field(
+        None,
+        max_length=255,
+        description="Company name registered under GST"
+    )
+    passport_number: Optional[str] = Field(
+        None,
+        max_length=20,
+        description="Passport number of primary guest"
+    )
+    passport_expiry: Optional[date] = Field(
+        None,
+        description="Passport expiry date of primary guest"
+    )
+
     @field_validator('checkout_date')
     @classmethod
     def validate_checkout_date(cls, v: date, info) -> date:
@@ -156,6 +257,18 @@ class HotelBookingRequest(BaseModel):
             raise ValueError('Guest details must be provided for each room')
         return v
 
+    @field_validator('gst_number')
+    @classmethod
+    def _validate_gst_number(cls, v: Optional[str]) -> Optional[str]:
+        return validate_gst_number(v)
+
+    @field_validator('passport_number')
+    @classmethod
+    def _validate_passport_number(cls, v: Optional[str]) -> Optional[str]:
+        return validate_passport_number(v)
+
+
+# ─── Bus Booking ──────────────────────────────────────────────────────────────
 
 class BusBookingRequest(BaseModel):
     """
@@ -174,7 +287,28 @@ class BusBookingRequest(BaseModel):
     special_requests: Optional[str] = Field(None, max_length=500, description="Special requests")
     contact_email: str = Field(..., description="Contact email for booking confirmation")
     contact_phone: str = Field(..., min_length=10, max_length=20, description="Contact phone number")
-    
+
+    # ── Compliance fields ──────────────────────────────────────────────────
+    gst_number: Optional[str] = Field(
+        None,
+        max_length=15,
+        description="GST number for business bookings (15-char alphanumeric)"
+    )
+    gst_company_name: Optional[str] = Field(
+        None,
+        max_length=255,
+        description="Company name registered under GST"
+    )
+    passport_number: Optional[str] = Field(
+        None,
+        max_length=20,
+        description="Passport number of primary passenger"
+    )
+    passport_expiry: Optional[date] = Field(
+        None,
+        description="Passport expiry date of primary passenger"
+    )
+
     @field_validator('passenger_details')
     @classmethod
     def validate_passenger_details(cls, v: List[PassengerSchema], info) -> List[PassengerSchema]:
@@ -184,6 +318,18 @@ class BusBookingRequest(BaseModel):
             raise ValueError('Passenger details must match passenger count')
         return v
 
+    @field_validator('gst_number')
+    @classmethod
+    def _validate_gst_number(cls, v: Optional[str]) -> Optional[str]:
+        return validate_gst_number(v)
+
+    @field_validator('passport_number')
+    @classmethod
+    def _validate_passport_number(cls, v: Optional[str]) -> Optional[str]:
+        return validate_passport_number(v)
+
+
+# ─── Response Schemas (unchanged) ─────────────────────────────────────────────
 
 class BookingResponse(BaseModel):
     """
@@ -206,11 +352,7 @@ class BookingResponse(BaseModel):
 
 
 class FlightBookingResponse(BookingResponse):
-    """
-    Schema for flight booking confirmation responses.
-    
-    Extends base booking response with flight-specific details.
-    """
+    """Schema for flight booking confirmation responses."""
     airline: str = Field(..., description="Airline name")
     flight_number: str = Field(..., description="Flight number")
     origin: str = Field(..., description="Origin airport code")
@@ -222,11 +364,7 @@ class FlightBookingResponse(BookingResponse):
 
 
 class HotelBookingResponse(BookingResponse):
-    """
-    Schema for hotel booking confirmation responses.
-    
-    Extends base booking response with hotel-specific details.
-    """
+    """Schema for hotel booking confirmation responses."""
     hotel_name: str = Field(..., description="Hotel name")
     hotel_address: str = Field(..., description="Hotel address")
     city: str = Field(..., description="City name")
@@ -239,11 +377,7 @@ class HotelBookingResponse(BookingResponse):
 
 
 class BusBookingResponse(BookingResponse):
-    """
-    Schema for bus booking confirmation responses.
-    
-    Extends base booking response with bus-specific details.
-    """
+    """Schema for bus booking confirmation responses."""
     operator: str = Field(..., description="Bus operator name")
     bus_type: str = Field(..., description="Bus type")
     origin: str = Field(..., description="Origin location")
@@ -255,11 +389,7 @@ class BusBookingResponse(BookingResponse):
 
 
 class BookingListResponse(BaseModel):
-    """
-    Schema for paginated booking list responses.
-    
-    Returns a paginated list of user bookings with metadata.
-    """
+    """Schema for paginated booking list responses."""
     total: int = Field(..., ge=0, description="Total number of bookings")
     page: int = Field(..., ge=1, description="Current page number")
     size: int = Field(..., ge=1, description="Number of bookings per page")
@@ -267,11 +397,7 @@ class BookingListResponse(BaseModel):
 
 
 class BookingDetailsResponse(BaseModel):
-    """
-    Schema for detailed booking information responses.
-    
-    Returns comprehensive booking details including all relevant information.
-    """
+    """Schema for detailed booking information responses."""
     booking_id: int = Field(..., description="Unique booking ID")
     booking_reference: str = Field(..., description="Booking reference number")
     type: str = Field(..., description="Booking type (flight, hotel, bus)")
@@ -286,22 +412,14 @@ class BookingDetailsResponse(BaseModel):
 
 
 class CancelBookingRequest(BaseModel):
-    """
-    Schema for booking cancellation requests.
-    
-    Validates cancellation reason and refund preferences.
-    """
+    """Schema for booking cancellation requests."""
     reason: str = Field(..., min_length=10, max_length=500, description="Cancellation reason")
     refund_preference: Optional[str] = Field(None, description="Refund method preference")
     contact_for_refund: Optional[bool] = Field(True, description="Whether to contact for refund processing")
 
 
 class CancelBookingResponse(BaseModel):
-    """
-    Schema for booking cancellation responses.
-    
-    Returns cancellation confirmation and refund information.
-    """
+    """Schema for booking cancellation responses."""
     booking_id: int = Field(..., description="Booking ID that was cancelled")
     status: BookingStatus = Field(..., description="Updated booking status")
     refund_amount: Optional[float] = Field(None, ge=0, description="Refund amount")
