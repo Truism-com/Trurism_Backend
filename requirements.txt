@@ -98,3 +98,4 @@ watchfiles
 wcwidth
 websockets
 wrapt
+aiosmtplib

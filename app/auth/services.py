@@ -21,6 +21,8 @@ from app.auth.schemas import (
 )
 from app.core.security import SecurityManager
 
+import logging
+
 
 class AuthService:
     """
@@ -74,16 +76,18 @@ class AuthService:
         await self.db.commit()
         await self.db.refresh(user)
         
-        try:
-            from app.services.email import email_service
-            await email_service.send_welcome(
-                to_email=user.email,
-                user_name=user.name,
-            )
-            logging.getLogger(__name__).info(f"Welcome email sent: {user.email}")
-        except Exception as email_err:
-            import logging
-            logger = logging.getLogger(__name__).warning(f"welcome email failed: {email_err}")
+        # try:
+        #     from app.services.email import email_service
+        #     sent = await email_service.send_welcome(
+        #         to_email=user.email,
+        #         user_name=user.name,
+        #     )
+        #     if sent:
+        #         logger.info(f"Welcome email sent to {user.email}")
+        #     else:
+        #         logger.warning(f"Welcome email not sent to {user.email}")
+        # except Exception as email_err:
+        #     logger.warning(f"Welcome email failed: {email_err}")
         
         return user
 

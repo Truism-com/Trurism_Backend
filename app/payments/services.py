@@ -301,23 +301,23 @@ class RazorpayService:
             logger.info(f"Payment verified successfully: {razorpay_payment_id}")
             
             #send payment success email (non-blocking)
-            try:
-                from app.auth.model import User as UserModel
-                from sqlalchemy import select as sa_select
-                user_result = await self.db.execute(sa_select(UserModel).where(UserModel.id == transaction.user_id))
-                user = user_result.scalar_one_or_none()
-                if user:
-                    from app.services.email import email_service
-                    await email_service.send_payment_success(
-                        to_email=user.email,
-                        transcation_id=razorpay_payment_id,
-                        amount=transaction.amount,
-                        payment_mode=transaction.payment_method or "Razorpay",
-                        booking_referance=str(transaction.booking_id),
-                    )
-                    logger.info(f"Payment success email sent: {user.email}")
-            except Exception as email_err:
-                logger.warning(f"Payment success email failed: {email_err}")
+            #email blocl temporarily disabled due to circular import issues in booking/__init__.py 
+            # try:
+            #     from app.auth.models import User as UserModel
+            #     user_result = await self.db.execute(select(UserModel).where(UserModel.id == transaction.user_id))
+            #     user = user_result.scalar_one_or_none()
+            #     if user:
+            #         from app.services.email import email_service
+            #         await email_service.send_payment_success(
+            #             to_email=user.email,
+            #             transaction_id=razorpay_payment_id,
+            #             amount=transaction.amount,
+            #             payment_method=transaction.payment_method or "Razorpay",
+            #             booking_reference=str(transaction.booking_id),
+            #         )
+            #         logger.info(f"Payment success email sent: {user.email}")
+            # except Exception as email_err:
+            #     logger.warning(f"Payment success email failed: {email_err}")
             return transaction
         
         except HTTPException:
