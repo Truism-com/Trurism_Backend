@@ -74,6 +74,17 @@ class AuthService:
         await self.db.commit()
         await self.db.refresh(user)
         
+        try:
+            from app.services.email import email_service
+            await email_service.send_welcome(
+                to_email=user.email,
+                user_name=user.name,
+            )
+            logging.getLogger(__name__).info(f"Welcome email sent to {user.email}")  
+        except Exception as email_err:
+            import logging
+            logging.getLogger(__name__).warning(f"Welcome email failed: {email_err}")
+        
         return user
 
     async def create_refresh_token_record(self, user_id: int, token: str, expires_at: datetime):
