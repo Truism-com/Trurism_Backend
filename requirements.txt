@@ -2,6 +2,7 @@ alembic
 amqp
 annotated-types
 anyio
+aiosmtplib
 asyncpg
 bcrypt
 billiard

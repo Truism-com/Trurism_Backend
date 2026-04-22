@@ -148,7 +148,7 @@ def run_migrations_online() -> None:
         migration_connect_args["statement_cache_size"] = 0
     
     # Choose engine type based on driver: psycopg -> sync, asyncpg -> async
-    is_psycopg = url.startswith("postgresql+psycopg://")
+    is_psycopg = url.startswith("postgresql+psycopg://") or url.startswith("postgresql+psycopg2://")
     if is_psycopg:
         connectable = engine_from_config(
             {"sqlalchemy.url": url},
