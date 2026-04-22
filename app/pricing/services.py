@@ -13,7 +13,7 @@ from sqlalchemy import select, func, and_, or_, desc
 
 from app.pricing.models import (
     PricingMarkupRule as MarkupRule, DiscountRule, ConvenienceFeeSlab, PriceAuditLog,
-    ServiceType, MarkupType, UserType, DiscountType
+    ServiceType, MarkupType, UserType, DiscountType, Coupon, CouponServiceType
 )
 
 logger = logging.getLogger(__name__)
@@ -889,3 +889,100 @@ class PricingService:
                 slabs.append(slab)
         
         return slabs
+
+
+    # =========================================================================
+    # COUPON METHODS
+    # =========================================================================
+    
+    async def create_coupon(self, data:dict, created_by: int) -> Coupon:
+        coupon = Coupon(**data, tenant_id=self.tenant_id, created_by=created_by)
+        self.db.add(coupon)
+        await self.db.commit()
+        await self.db.refresh(coupon)
+        return coupon
+    
+    async def get_coupon(self, coupon_id: int) -> Optional[Coupon]:
+        stmt = select(Coupon).where(
+            Coupon.id == coupon_id,
+            Coupon.tenant_id == self.tenant_id
+        )
+        result = await self.db.execute(stmt)
+        return result.scalar_one_or_none()
+    
+    async def get_coupons(self, skip: int = 0, limit:int=50) -> List[Coupon]:
+        stmt= (
+            select(Coupon)
+            .where(Coupon.tenant_id == self.tenant_id)
+            .offset(skip)
+            .limit(limit)
+        )
+        result = await self.db.execute(stmt)
+        return list(result.scalars().all())
+    
+    async def update_coupon(self, coupon_id: int, data: dict) -> Optional[Coupon]:
+        coupon = await self.get_coupon(coupon_id)
+        if not coupon:
+            return None
+        for field,value in data.items():
+            if value is not None:
+                setattr(coupon, field, value)
+        await self.db.commit()
+        await self.db.refresh(coupon)
+        return coupon
+    
+    async def delete_coupon(self, coupon_id: int) -> bool:
+        coupon = await self.get_coupon(coupon_id)
+        if not coupon:
+            return False
+        await self.db.delete(coupon)
+        await self.db.commit()
+        return True
+    
+    async def validate_coupon(
+        self,
+        code:str,
+        order_amount: Decimal,
+        service_type: CouponServiceType,
+    ) -> Tuple[bool, Optional[Decimal],Optional[str], Optional[Coupon]]:
+        """
+        validate a coupon code against an order
+        returns: (is_valid,discount_amount,error_message,coupon)
+        """
+        stmt = select(Coupon).where(
+            Coupon.code == code.upper().strip(),
+            Coupon.tenant_id == self.tenant_id,
+        )
+        result = await self.db.execute(stmt)
+        coupon = result.scalar_one_or_none()
+        
+        if not coupon:
+            return False, None, "Invalid coupon code", None
+        if not coupon.is_active:
+            return False, None, "Coupon is no longer active", None
+        
+        now =  datetime.utcnow()
+        if now < coupon.valid_from or now>coupon.valid_untill:
+            return False, None, "Coupon is not yet valid or is expired", None
+        if coupon.service_type != CouponServiceType.ALL and coupon.service_type != service_type:
+            return False,None,"Coupon is not valid for this service", None
+        if coupon.min_order_amount and order_amount < coupon.min_order_amount:
+            return False, None, f"Minimum order amount is {coupon.min_order_amount}", None
+        if coupon.usage_limit is not None and coupon.used_count >= coupon.usage_limit:
+            return False, None, "Coupone iage limit has been reached", None
+        
+        #claculating discount
+        if coupon.discount_type == DiscountType.FIXED:
+            discount_amount = coupon.discount_value
+        else:
+            discount_amount = (order_amount*coupon.discount_value/100).quantize(Decimal("0.01"),rounding=ROUND_HALF_UP)
+        if coupon.max_discount and discount_amount > coupon.max_discount:
+            discount_amount = coupon.max_discount
+            
+        return True , discount_amount , None, Coupon
+    
+    async def increment_coupon_usge(self,coupon_id:int) -> None:
+        coupon = await self.get_coupon(coupon_id)
+        if coupon:
+            coupon.used_count += 1
+            await self.db.commit()

@@ -301,3 +301,44 @@ class PriceAuditLog(Base):
     
     def __repr__(self):
         return f"<PriceAuditLog {self.id}: {self.base_fare} -> {self.final_amount}>"
+
+class CouponServiceType(str, enum.Enum):
+    """Service type supported by coupons."""
+    FLIGHT = "flight"
+    HOTEL = "hotel"
+    BUS = "bus"
+    ALL = "all"
+    
+class Coupon(Base):
+    """Customer-facting promo/coupon codes."""
+    
+    __tablename__ = "coupons"
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.id"), index=True)
+    
+    code: Mapped[str] = mapped_column(String(50), unique=True, nullable=False, index=True)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    
+    discount_type: Mapped[DiscountType] = mapped_column(SQLEnum(DiscountType), nullable=False, default=DiscountType.PERCENTAGE)
+    discount_value: Mapped[Decimal] = mapped_column(Numeric(12, 4), nullable=False)
+    
+    min_order_amount: Mapped[Optional[Decimal]] = mapped_column(Numeric(14, 2), nullable=True)
+    max_discount: Mapped[Optional[Decimal]] = mapped_column(Numeric(12,2), nullable=True)
+    
+    valid_from: Mapped[datetime] = mapped_column(DateTime(timezone=True),nullable=False)
+    valid_untill: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    
+    usage_limit: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    used_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    
+    service_type: Mapped[CouponServiceType] = mapped_column(SQLEnum(CouponServiceType), nullable=False, default=CouponServiceType.ALL    )
+    
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    
+    created_by: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True),server_default=func.now())
+    updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), onupdate=func.now())
+    
+    def __repr__(self):
+        return f"<Coupon {self.code}: {self.discount_type.value} = {self.discount_value}>"
