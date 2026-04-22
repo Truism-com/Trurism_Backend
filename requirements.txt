@@ -39,6 +39,7 @@ hyperframe
 identify
 idna
 iniconfig
+Jinja2
 kombu
 limits
 lxml
