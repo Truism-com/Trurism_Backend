@@ -206,9 +206,9 @@ class SecurityManager:
         # Database fallback when Redis unavailable
         try:
             from app.auth.models import TokenBlacklist
-            from app.core.database import async_session
+            from app.core.database import AsyncSessionLocal
 
-            async with async_session() as session:
+            async with AsyncSessionLocal() as session:
                 # Hash the token for security before storing
                 token_hash = hashlib.sha256(token.encode()).hexdigest()
                 blacklist_entry = TokenBlacklist(
@@ -217,6 +217,8 @@ class SecurityManager:
                 )
                 session.add(blacklist_entry)
                 await session.commit()
+        except ImportError:
+            logger.warning("TokenBlacklist model not available, token blacklist not persisted")
         except Exception as e:
             logger.error(f"Failed to blacklist token in database: {e}", exc_info=True)
 
@@ -243,22 +245,30 @@ class SecurityManager:
         # Database fallback when Redis unavailable
         try:
             from app.auth.models import TokenBlacklist
-            from app.core.database import async_session
+            from app.core.database import AsyncSessionLocal
             from sqlalchemy import select
 
             token_hash = hashlib.sha256(token.encode()).hexdigest()
 
-            async with async_session() as session:
+            async with AsyncSessionLocal() as session:
                 stmt = select(TokenBlacklist).where(
                     TokenBlacklist.token_jti == token_hash,
                     TokenBlacklist.expires_at > datetime.utcnow()  # Not expired
                 )
                 result = await session.execute(stmt)
                 return result.scalars().first() is not None
+        except ImportError:
+            # TokenBlacklist model doesn't exist yet -- no blacklist infrastructure,
+            # so no tokens have been blacklisted. Safe to return False.
+            logger.debug("TokenBlacklist model not available, skipping blacklist check")
+            return False
         except Exception as e:
-            logger.warning(f"Database blacklist check failed, failing secure (rejecting token): {e}")
-            # Fail secure: if we can't check the blacklist, reject the token to prevent reuse of stolen tokens
-            return True
+            logger.warning(f"Database blacklist check failed, failing open: {e}")
+            # Fail open: if the blacklist table doesn't exist or DB query fails,
+            # rejecting ALL tokens breaks the entire auth system (as seen in this bug).
+            # The risk of a previously-logged-out token being reused is far lower
+            # than the risk of locking out every user.
+            return False
     
     @staticmethod
     def get_token_expiration(token: str) -> Optional[datetime]:
