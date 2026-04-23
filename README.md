@@ -124,6 +124,7 @@ REDIS_URL=redis://localhost:6379
 
 # JWT
 JWT_SECRET_KEY=your-super-secret-jwt-key
+ACCESS_TOKEN_EXPIRE_MINUTES=120
 
 # External APIs
 XML_AGENCY_USERNAME=your_username

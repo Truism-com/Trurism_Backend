@@ -94,7 +94,7 @@ class Settings(BaseSettings):
     # JWT Settings
     jwt_secret_key: str = ""
     jwt_algorithm: str = "HS256"
-    access_token_expire_minutes: int = 5  # Reduced from 15 to 5 minutes as compensating control for Redis-unavailable token blacklist
+    access_token_expire_minutes: int = 120  # Keep users logged in for at least 2 hours
     refresh_token_expire_days: int = 7
     
     # Rate Limiting
