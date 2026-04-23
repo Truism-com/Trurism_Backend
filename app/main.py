@@ -386,8 +386,9 @@ async def root():
         "message": "Welcome to Travel Booking Platform API",
         "version": settings.app_version,
         "environment": settings.environment,
-        "docs_url": "/docs" if settings.debug else None,
-        "redoc_url": "/redoc" if settings.debug else None,
+        "docs_url": app.docs_url,
+        "redoc_url": app.redoc_url,
+        "openapi_url": app.openapi_url,
         "health_url": "/health"
     }
 
