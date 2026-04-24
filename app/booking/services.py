@@ -16,7 +16,10 @@ from datetime import datetime, timedelta
 from typing import List, Optional, Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, and_
-from fastapi import HTTPException, status, logger
+from fastapi import HTTPException, status
+import logging
+
+logger = logging.getLogger(__name__)
 
 from app.booking.models import (
     FlightBooking, HotelBooking, BusBooking, PassengerInfo,

@@ -37,9 +37,11 @@ class TenantMiddleware(BaseHTTPMiddleware):
             "/redoc",
             "/openapi.json",
             "/health",
+            "/",          # Root endpoint needs no tenant context
             "/auth",
             "/v1/admin/tenants",
-            "/favicon.ico"
+            "/favicon.ico",
+            "/robots",    # Azure App Service internal health probes hit /robots933456.txt
         ]
         
         if any(request.url.path.startswith(path) for path in skip_paths):
@@ -60,6 +62,12 @@ class TenantMiddleware(BaseHTTPMiddleware):
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="Invalid X-Tenant-ID header"
                 )
+
+        # Short-circuit: if no tenant identifier is provided, skip DB lookup
+        if not tenant_id and not tenant_code:
+            request.state.tenant = None
+            request.state.tenant_id = None
+            return await call_next(request)
         
         cache_key = f"id:{tenant_id}" if tenant_id else (f"code:{tenant_code}" if tenant_code else f"host:{host}")
         
