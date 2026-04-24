@@ -13,7 +13,7 @@ from app.core.database import get_db
 from app.auth.api import get_current_user, get_current_admin_user
 from app.auth.models import User
 from app.pricing.services import PricingService
-from app.pricing.models import ServiceType, MarkupType, UserType, DiscountType,CouponServiceType
+from app.pricing.models import ServiceType, MarkupType, UserType, DiscountType, CouponServiceType
 from app.pricing.schemas import (
     MarkupRuleCreate, MarkupRuleUpdate, MarkupRuleResponse, MarkupRuleListResponse,
     DiscountRuleCreate, DiscountRuleUpdate, DiscountRuleResponse, DiscountRuleListResponse,
@@ -22,7 +22,8 @@ from app.pricing.schemas import (
     ConvenienceFeeSlabListResponse,
     PriceCalculationRequest, PriceCalculationResponse,
     MarkupBreakdown, DiscountBreakdown, FeeBreakdown,
-    BulkMarkupUpdate, BulkDiscountUpdate, CouponCreate, CouponUpdate, CouponResponse, CouponValidateRequest, CouponValidateResponse,
+    BulkMarkupUpdate, BulkDiscountUpdate,
+    CouponCreate, CouponUpdate, CouponResponse, CouponValidateRequest, CouponValidateResponse,
 )
 
 router = APIRouter(prefix="/pricing", tags=["Pricing Engine"])
@@ -521,32 +522,34 @@ async def seed_default_pricing(
 # COUPON ENDPOINTS
 # =============================================================================
 
-@router.post("/coupon/validate",response_description=CouponValidateResponse)
+@router.post("/coupons/validate", response_model=CouponValidateResponse)
 async def validate_coupon(
     data: CouponValidateRequest,
     db: AsyncSession = Depends(get_db),
 ):
-    """validate a coupon code and return the discoun amount"""
-    service = PricingService (db)
+    """Validate a coupon code and return the discount amount."""
+    service = PricingService(db)
     is_valid, discount_amount, error, coupon = await service.validate_coupon(
         code=data.code,
         order_amount=data.order_amount,
         service_type=data.service_type,
     )
     if not is_valid:
-        return CouponValidateResponse(is_valid=False,error=error)
+        return CouponValidateResponse(is_valid=False, error=error)
+
     return CouponValidateResponse(
         is_valid=True,
         discount_amount=discount_amount,
         final_amount=data.order_amount - discount_amount,
         coupon=CouponResponse.model_validate(coupon),
     )
-    
-@admin_router.post("/coupons", response_model=CouponValidateResponse)
+
+
+@admin_router.post("/coupons", response_model=CouponResponse)
 async def create_coupon(
     data: CouponCreate,
     current_user: User = Depends(get_current_admin_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ):
     """Admin: Create a new coupon."""
     service = PricingService(db)
@@ -556,43 +559,46 @@ async def create_coupon(
     )
     return CouponResponse.model_validate(coupon)
 
+
 @admin_router.get("/coupons", response_model=List[CouponResponse])
 async def list_coupons(
-    skip: int =  Query (0, ge=0),
-    limit: int = Query (50 , ge=1, le =200),
-    current_user: User= Depends(get_current_admin_user),
-    db: AsyncSession = Depends(get_db)
-):
-    """Admin: list all coupons"""
-    service = PricingService(db)
-    coupons = await service.get_coupons(skip=skip,limit=limit)
-    return [CouponResponse.model_validate(c) for c in coupons]
-
-@admin_router.put("/coupons/{coupon_id}",response_model=CouponValidateResponse)
-async def update_coupon(
-    data: CouponUpdate,  
-    coupon_id: int = Path(...,ge=1),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
     current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Admin: Update an existing coupon"""
+    """Admin: List all coupons."""
     service = PricingService(db)
-    coupon =await service.update_coupon(
+    coupons = await service.get_coupons(skip=skip, limit=limit)
+    return [CouponResponse.model_validate(c) for c in coupons]
+
+
+@admin_router.put("/coupons/{coupon_id}", response_model=CouponResponse)
+async def update_coupon(
+    coupon_id: int = Path(..., ge=1),
+    data: CouponUpdate = ...,
+    current_user: User = Depends(get_current_admin_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Admin: Update an existing coupon."""
+    service = PricingService(db)
+    coupon = await service.update_coupon(
         coupon_id=coupon_id,
-        data=data.model_dump(exclude_none=True)
+        data=data.model_dump(exclude_none=True),
     )
     if not coupon:
-        raise HTTPException(status_code=404, detail="coupon not found")
+        raise HTTPException(status_code=404, detail="Coupon not found")
     return CouponResponse.model_validate(coupon)
 
-@admin_router.delete("/coupons/{coupon_id}",status_code=204)
+
+@admin_router.delete("/coupons/{coupon_id}", status_code=204)
 async def delete_coupon(
     coupon_id: int = Path(..., ge=1),
     current_user: User = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Admin: delete a coupon"""
+    """Admin: Delete a coupon."""
     service = PricingService(db)
     deleted = await service.delete_coupon(coupon_id)
     if not deleted:
-        raise HTTPException(status_code=404 , detail="Coupon not found")
+        raise HTTPException(status_code=404, detail="Coupon not found")

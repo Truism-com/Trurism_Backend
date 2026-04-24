@@ -1,17 +1,16 @@
-"""
-add coupons table 
+"""Add coupons table
 
 Revision ID: 004
 Revises: 003
 """
-
 from alembic import op
 import sqlalchemy as sa
 
 revision = "004_add_coupons"
-down_revision= "003_add_dashboard_pricing_company"
-branch_labels=None
-depends_on=None
+down_revision = "003_add_dashboard_pricing_company"
+branch_labels = None
+depends_on = None
+
 
 def upgrade() -> None:
     op.create_table(
@@ -34,6 +33,7 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
         sa.Column("updated_at", sa.DateTime(timezone=True), onupdate=sa.func.now(), nullable=True),
     )
-    
+
+
 def downgrade() -> None:
     op.drop_table("coupons")

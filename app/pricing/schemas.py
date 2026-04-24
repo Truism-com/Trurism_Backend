@@ -9,7 +9,7 @@ from typing import Optional, List, Dict, Any
 from datetime import datetime, date
 from decimal import Decimal
 
-from app.pricing.models import ServiceType, MarkupType, UserType, DiscountType , CouponServiceType
+from app.pricing.models import ServiceType, MarkupType, UserType, DiscountType, CouponServiceType
 
 
 
@@ -444,37 +444,37 @@ class BulkDiscountUpdate(BaseModel):
 
 class CouponCreate(BaseModel):
     """Schema for creating a coupon."""
-    
     code: str = Field(..., min_length=3, max_length=50)
     description: Optional[str] = None
-    
+
     discount_type: DiscountType
-    discount_value: Decimal = Field(..., gt=0) 
-    
-    min_order_amount: Optional[Decimal] = Field(None, gt=0)
-    max_discount: Optional[Decimal] = Field(None, gt=0)
-    
+    discount_value: Decimal = Field(..., gt=0)
+
+    min_order_amount: Optional[Decimal] = Field(None, ge=0)
+    max_discount: Optional[Decimal] = Field(None, ge=0)
+
     valid_from: datetime
     valid_until: datetime
-    
+
     usage_limit: Optional[int] = Field(None, ge=1)
     service_type: CouponServiceType = CouponServiceType.ALL
     is_active: bool = True
-    
+
     @field_validator("code")
     @classmethod
-    def uppercase_code(cls, v:str) -> str:
+    def uppercase_code(cls, v: str) -> str:
         return v.upper().strip()
-    
+
     @field_validator("valid_until")
     @classmethod
-    def until_after_from(cls, v:datetime, info) -> datetime:
-        if "valid_from" in info.date and v<= info.date["valid_from"]:
-            raise ValueError("valide_until must be  after valif_from")
+    def until_after_from(cls, v: datetime, info) -> datetime:
+        if "valid_from" in info.data and v <= info.data["valid_from"]:
+            raise ValueError("valid_until must be after valid_from")
         return v
-    
+
+
 class CouponUpdate(BaseModel):
-    """schema for updating a coupon(all fields optional)"""
+    """Schema for updating a coupon (all fields optional)."""
     description: Optional[str] = None
     discount_type: Optional[DiscountType] = None
     discount_value: Optional[Decimal] = Field(None, gt=0)
@@ -485,34 +485,38 @@ class CouponUpdate(BaseModel):
     usage_limit: Optional[int] = Field(None, ge=1)
     service_type: Optional[CouponServiceType] = None
     is_active: Optional[bool] = None
-    
+
+
 class CouponResponse(BaseModel):
-    """schema for updating response."""
-    id:int
-    code:str
-    discount:Optional[str]
-    discount_type:DiscountType
+    """Schema for coupon responses."""
+    id: int
+    code: str
+    description: Optional[str]
+    discount_type: DiscountType
     discount_value: Decimal
     min_order_amount: Optional[Decimal]
     max_discount: Optional[Decimal]
     valid_from: datetime
     valid_until: datetime
     usage_limit: Optional[int]
+    used_count: int
     service_type: CouponServiceType
     is_active: bool
     created_at: datetime
     updated_at: Optional[datetime]
-    
+
     model_config = {"from_attributes": True}
-    
+
+
 class CouponValidateRequest(BaseModel):
-    """Response schema for validation a coupon code"""
+    """Request schema for validating a coupon code."""
     code: str
     order_amount: Decimal = Field(..., gt=0)
     service_type: CouponServiceType = CouponServiceType.ALL
 
+
 class CouponValidateResponse(BaseModel):
-    """Response schema for validation a coupon code"""
+    """Response schema for coupon validation."""
     is_valid: bool
     discount_amount: Optional[Decimal] = None
     final_amount: Optional[Decimal] = None
