@@ -8,6 +8,8 @@ This module contains business logic for authentication operations:
 - Agent approval workflow
 """
 
+import logging
+
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
 from fastapi import HTTPException, status
@@ -73,6 +75,16 @@ class AuthService:
         self.db.add(user)
         await self.db.commit()
         await self.db.refresh(user)
+        
+        try:
+            from app.services.email import email_service
+            await email_service.send_welcome(
+                to_email=user.email,
+                user_name=user.name,
+            )
+            logging.getLogger(__name__).info(f"Welcome email sent to {user.email}")  
+        except Exception as email_err:
+            logging.getLogger(__name__).warning(f"Welcome email failed: {email_err}")
         
         return user
 

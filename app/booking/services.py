@@ -17,6 +17,9 @@ from typing import List, Optional, Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, and_
 from fastapi import HTTPException, status
+import logging
+
+logger = logging.getLogger(__name__)
 
 from app.booking.models import (
     FlightBooking, HotelBooking, BusBooking, PassengerInfo,
@@ -181,6 +184,22 @@ class FlightBookingService(BaseBookingService):
             
             await self.db.commit()
             await self.db.refresh(flight_booking)
+
+            if flight_booking.status == BookingStatus.CONFIRMED:
+                try:
+                    from app.services.email import email_service
+                    await email_service.send_booking_confirmation(
+                        to_email=user.email,
+                        booking_reference=booking_reference,
+                        service_type="Flight",
+                        travel_date=str(flight_booking.departure_time.date()),
+                        amount=flight_booking.total_amount,
+                        passenger_name=user.name,
+                    )
+                    
+                    logger.info(f"Booking confirmation email sent to {user.email} for {booking_reference}") 
+                except Exception as email_err:
+                    logger.warning(f"Flight booking email failed: {email_err}")    
             
             return flight_booking
             
@@ -332,6 +351,22 @@ class HotelBookingService(BaseBookingService):
             
             await self.db.commit()
             await self.db.refresh(hotel_booking)
+            
+            if hotel_booking.status == BookingStatus.CONFIRMED:
+                try:
+                    from app.services.email import email_service
+                    await email_service.send_booking_confirmation(
+                        to_email=user.email,
+                        booking_reference=booking_reference,
+                        service_type="Hotel",
+                        travel_date=str(hotel_booking.checkin_date.date()),
+                        amount=hotel_booking.total_amount,
+                        passenger_name=user.name,
+                    )
+                    logger.info(f"Booking confirmation email sent to {user.email} for {booking_reference}") 
+                except Exception as email_err:
+                    logger.warning(f"Hotel booking email failed: {email_err}")
+            
             return hotel_booking
             
         except Exception as e:
@@ -443,6 +478,22 @@ class BusBookingService(BaseBookingService):
             
             await self.db.commit()
             await self.db.refresh(bus_booking)
+            
+            if bus_booking.status == BookingStatus.CONFIRMED:
+                try:
+                    from app.services.email import email_service
+                    await email_service.send_booking_confirmation(
+                        to_email=user.email,
+                        booking_reference=booking_reference,
+                        service_type="Bus",
+                        travel_date=str(bus_booking.travel_date.date()),
+                        amount=bus_booking.total_amount,
+                        passenger_name=user.name,
+                    )
+                    logger.info(f"Booking confirmation email sent to {user.email} for {booking_reference}") 
+                except Exception as email_err:
+                    logger.warning(f"Bus booking email failed: {email_err}")
+            
             return bus_booking
             
         except Exception as e:
