@@ -132,16 +132,17 @@ async def register_user(
     auth_service = AuthService(db)
     try:
         user = await auth_service.register_user(user_data, tenant_id=tenant_id)
+        return UserProfileResponse.model_validate(user)
     except HTTPException:
         raise
     except Exception as e:
         import logging
         logging.error(f"Registration failed: {str(e)}", exc_info=True)
+        # Do NOT expose internal error details in production
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Registration failed. Please try again later."
+            detail="Registration failed. Please try again."
         )
-    return UserProfileResponse.model_validate(user)
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -178,20 +179,33 @@ async def login_user(
     # Create tokens
     token_data = {"sub": str(user.id), "email": user.email, "role": user.role.value}
     
-    access_token = SecurityManager.create_access_token(
-        data=token_data,
-        expires_delta=timedelta(minutes=settings.access_token_expire_minutes)
-    )
+    try:
+        access_token = SecurityManager.create_access_token(
+            data=token_data,
+            expires_delta=timedelta(minutes=settings.access_token_expire_minutes)
+        )
+        
+        refresh_token = SecurityManager.create_refresh_token(data=token_data)
+    except Exception as token_err:
+        logging.error(f"Token creation failed: {str(token_err)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Authentication failed"
+        )
     
-    refresh_token = SecurityManager.create_refresh_token(data=token_data)
     # Persist refresh token in DB
     try:
         from app.core.security import SecurityManager as _SM
         expires_at = _SM.get_token_expiration(refresh_token)
-        await auth_service.create_refresh_token_record(user.id, refresh_token, expires_at)
-    except Exception:
-        # If storing refresh token fails, proceed but log in production (keep login flow resilient)
-        pass
+        
+        # CRITICAL: Check expiration is not None (prevents SQL constraint errors)
+        if expires_at is None:
+            logging.warning(f"Token expiration extraction failed for user {user.id}, skipping DB persistence")
+        else:
+            await auth_service.create_refresh_token_record(user.id, refresh_token, expires_at)
+    except Exception as db_err:
+        # If storing refresh token fails, log but don't block login (keep flow resilient)
+        logging.warning(f"Failed to persist refresh token for user {user.id}: {str(db_err)}")
     
     return TokenResponse(
         access_token=access_token,

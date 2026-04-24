@@ -113,7 +113,7 @@ CORS_ORIGINS=*
 | Variable | Type | Default | Description |
 |----------|------|---------|-------------|
 | `JWT_ALGORITHM` | string | `HS256` | JWT signing algorithm |
-| `ACCESS_TOKEN_EXPIRE_MINUTES` | integer | `15` | Access token TTL in minutes |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | integer | `120` | Access token TTL in minutes |
 | `REFRESH_TOKEN_EXPIRE_DAYS` | integer | `7` | Refresh token TTL in days |
 | `BCRYPT_ROUNDS` | integer | `12` | Password hashing cost factor |
 | `RATE_LIMIT_PER_MINUTE` | integer | `60` | API rate limit per user |
@@ -240,7 +240,7 @@ DATABASE_MAX_OVERFLOW=10
 # Security
 JWT_SECRET_KEY=dev-secret-key-change-in-production-min-32-chars
 JWT_ALGORITHM=HS256
-ACCESS_TOKEN_EXPIRE_MINUTES=30
+ACCESS_TOKEN_EXPIRE_MINUTES=120
 REFRESH_TOKEN_EXPIRE_DAYS=7
 BCRYPT_ROUNDS=10
 RATE_LIMIT_PER_MINUTE=100

@@ -16,6 +16,22 @@ from enum import Enum
 from app.auth.models import UserRole, AgentApprovalStatus
 
 
+def mask_pan(pan: Optional[str]) -> Optional[str]:
+    """
+    Mask PAN number for security (PII protection).
+
+    Args:
+        pan: PAN number to mask
+
+    Returns:
+        Masked PAN in format: ABCDE****F (shows first 5 and last 1 char)
+        or None if input is None
+    """
+    if not pan or len(pan) < 6:
+        return None
+    return f"{pan[:5]}****{pan[-1]}"
+
+
 class UserRegisterRequest(BaseModel):
     """
     Schema for user registration request.
@@ -44,6 +60,8 @@ class UserRegisterRequest(BaseModel):
             raise ValueError('Password must contain at least one lowercase letter')
         if not any(c.isdigit() for c in v):
             raise ValueError('Password must contain at least one digit')
+        if not any(c in '!@#$%^&*()_+-=[]{}|;:,.<>?' for c in v):
+            raise ValueError('Password must contain at least one special character (!@#$%^&*()_+-=[]{}|;:,.<>?)')
         return v
     
     @field_validator('company_name')
@@ -101,8 +119,9 @@ class RefreshTokenRequest(BaseModel):
 class UserProfileResponse(BaseModel):
     """
     Schema for user profile response.
-    
+
     Returns user profile information for authenticated users.
+    PAN numbers are masked for security (PII protection).
     """
     id: int
     email: str
@@ -113,11 +132,43 @@ class UserProfileResponse(BaseModel):
     is_active: bool
     is_verified: bool
     company_name: Optional[str]
-    pan_number: Optional[str]
+    pan_number: Optional[str] = None  # Masked in response
     approval_status: Optional[AgentApprovalStatus]
     created_at: datetime
     last_login: Optional[datetime]
-    
+
+    def __init__(self, **data):
+        """Mask PAN on initialization for security."""
+        if 'pan_number' in data and data['pan_number']:
+            data['pan_number'] = mask_pan(data['pan_number'])
+        super().__init__(**data)
+
+    class Config:
+        from_attributes = True
+
+
+class UserDetailedResponse(BaseModel):
+    """
+    Schema for detailed user profile response (admin-only).
+
+    Returns complete user information including unmasked PAN.
+    Should only be exposed to admins viewing user details.
+    """
+    id: int
+    email: str
+    name: str
+    phone: Optional[str]
+    address: Optional[str]
+    role: UserRole
+    is_active: bool
+    is_verified: bool
+    company_name: Optional[str]
+    pan_number: Optional[str]  # UNMASKED - admin only
+    approval_status: Optional[AgentApprovalStatus]
+    created_at: datetime
+    updated_at: Optional[datetime]
+    last_login: Optional[datetime]
+
     class Config:
         from_attributes = True
 
@@ -162,6 +213,8 @@ class PasswordChangeRequest(BaseModel):
             raise ValueError('Password must contain at least one lowercase letter')
         if not any(c.isdigit() for c in v):
             raise ValueError('Password must contain at least one digit')
+        if not any(c in '!@#$%^&*()_+-=[]{}|;:,.<>?' for c in v):
+            raise ValueError('Password must contain at least one special character (!@#$%^&*()_+-=[]{}|;:,.<>?)')
         return v
 
 
