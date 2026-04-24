@@ -186,8 +186,8 @@ class FlightBookingService(BaseBookingService):
             await self.db.refresh(flight_booking)
 
             if flight_booking.status == BookingStatus.CONFIRMED:
-                from app.services.email import email_service
                 try:
+                    from app.services.email import email_service
                     await email_service.send_booking_confirmation(
                         to_email=user.email,
                         booking_reference=booking_reference,
@@ -353,8 +353,8 @@ class HotelBookingService(BaseBookingService):
             await self.db.refresh(hotel_booking)
             
             if hotel_booking.status == BookingStatus.CONFIRMED:
-                from app.services.email import email_service
                 try:
+                    from app.services.email import email_service
                     await email_service.send_booking_confirmation(
                         to_email=user.email,
                         booking_reference=booking_reference,
@@ -480,8 +480,8 @@ class BusBookingService(BaseBookingService):
             await self.db.refresh(bus_booking)
             
             if bus_booking.status == BookingStatus.CONFIRMED:
-                from app.services.email import email_service
                 try:
+                    from app.services.email import email_service
                     await email_service.send_booking_confirmation(
                         to_email=user.email,
                         booking_reference=booking_reference,
