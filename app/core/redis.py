@@ -25,11 +25,14 @@ def get_redis_client() -> Optional[aioredis.Redis]:
                 settings.redis_url, 
                 encoding="utf-8", 
                 decode_responses=True,
-                max_connections=20
+                max_connections=20,
+                socket_connect_timeout=5,  # Azure: add timeout to prevent hanging
+                socket_keepalive=True  # Keep connection alive
             )
             logger.info("Redis client initialized")
         except Exception as e:
             logger.error(f"Failed to initialize Redis client: {e}")
+            _redis_client = None
     return _redis_client
 
 

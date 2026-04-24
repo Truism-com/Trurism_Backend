@@ -43,7 +43,7 @@ class TenantMiddleware(BaseHTTPMiddleware):
             "/favicon.ico",
             "/robots",    # Azure App Service internal health probes hit /robots933456.txt
         ]
-        
+
         if any(request.url.path.startswith(path) for path in skip_paths):
             request.state.tenant = None
             request.state.tenant_id = None
@@ -53,7 +53,7 @@ class TenantMiddleware(BaseHTTPMiddleware):
         tenant_code = request.headers.get("X-Tenant-Code")
         tenant_id_header = request.headers.get("X-Tenant-ID")
         host = request.headers.get("Host", "").split(":")[0]
-        
+
         if tenant_id_header:
             try:
                 tenant_id = int(tenant_id_header)
@@ -63,12 +63,17 @@ class TenantMiddleware(BaseHTTPMiddleware):
                     detail="Invalid X-Tenant-ID header"
                 )
 
-        # Short-circuit: if no tenant identifier is provided, skip DB lookup
+        # Short-circuit: if no tenant identifier is provided in the request
+        # headers, skip the DB lookup entirely. In single-tenant mode (the
+        # current deployment stage) there are no tenants seeded in the DB,
+        # so the lookup would always return None and only cause a DNS/DB hit
+        # on every request. When multi-tenancy is active, clients must send
+        # X-Tenant-ID or X-Tenant-Code headers to trigger tenant resolution.
         if not tenant_id and not tenant_code:
             request.state.tenant = None
             request.state.tenant_id = None
             return await call_next(request)
-        
+
         cache_key = f"id:{tenant_id}" if tenant_id else (f"code:{tenant_code}" if tenant_code else f"host:{host}")
         
         # Try to get from Redis cache first
@@ -88,48 +93,54 @@ class TenantMiddleware(BaseHTTPMiddleware):
         tenant = None
         try:
             from app.core.database import async_session_maker
+            import asyncio
             
-            async with async_session_maker() as db:
-                if tenant_id:
-                    result = await db.execute(
-                        select(Tenant).where(Tenant.id == tenant_id, Tenant.is_active == True)
-                    )
-                    tenant = result.scalar_one_or_none()
-                elif tenant_code:
-                    result = await db.execute(
-                        select(Tenant).where(Tenant.code == tenant_code, Tenant.is_active == True)
-                    )
-                    tenant = result.scalar_one_or_none()
-                elif host:
-                    result = await db.execute(
-                        select(Tenant).where(
-                            (Tenant.domain == host) | (Tenant.subdomain == host.split(".")[0]),
-                            Tenant.is_active == True
+            # Use timeout to prevent hanging connections in Azure
+            async with asyncio.timeout(5):
+                async with async_session_maker() as db:
+                    if tenant_id:
+                        result = await db.execute(
+                            select(Tenant).where(Tenant.id == tenant_id, Tenant.is_active == True)
                         )
-                    )
-                    tenant = result.scalar_one_or_none()
-                
-                if tenant:
-                    tenant_id = tenant.id
-                    tenant_data = {
-                        "id": tenant.id,
-                        "code": tenant.code,
-                        "name": tenant.name,
-                        "domain": tenant.domain,
-                        "subdomain": tenant.subdomain,
-                        "is_active": tenant.is_active
-                    }
-                    # Cache in Redis for 10 minutes
-                    await set_tenant_cache(cache_key, tenant_data, ttl=600)
-                    logger.info(f"Resolved tenant from DB: {tenant.code} (ID: {tenant.id}) - Cached in Redis")
+                        tenant = result.scalar_one_or_none()
+                    elif tenant_code:
+                        result = await db.execute(
+                            select(Tenant).where(Tenant.code == tenant_code, Tenant.is_active == True)
+                        )
+                        tenant = result.scalar_one_or_none()
+                    elif host:
+                        result = await db.execute(
+                            select(Tenant).where(
+                                (Tenant.domain == host) | (Tenant.subdomain == host.split(".")[0]),
+                                Tenant.is_active == True
+                            )
+                        )
+                        tenant = result.scalar_one_or_none()
                     
-                    # For downstream logic that might expect a model object, 
-                    # we'll store the object in the request state only for the first time
-                    request.state.tenant = tenant
-                else:
-                    logger.warning(f"No tenant resolved for query: {cache_key}")
-                    request.state.tenant = None
+                    if tenant:
+                        tenant_id = tenant.id
+                        tenant_data = {
+                            "id": tenant.id,
+                            "code": tenant.code,
+                            "name": tenant.name,
+                            "domain": tenant.domain,
+                            "subdomain": tenant.subdomain,
+                            "is_active": tenant.is_active
+                        }
+                        # Cache in Redis for 10 minutes
+                        await set_tenant_cache(cache_key, tenant_data, ttl=600)
+                        logger.info(f"Resolved tenant from DB: {tenant.code} (ID: {tenant.id}) - Cached in Redis")
+                        
+                        # For downstream logic that might expect a model object, 
+                        # we'll store the object in the request state only for the first time
+                        request.state.tenant = tenant
+                    else:
+                        logger.warning(f"No tenant resolved for query: {cache_key}")
+                        request.state.tenant = None
         
+        except asyncio.TimeoutError:
+            logger.error("Tenant resolution timed out - Azure database may be slow")
+            request.state.tenant = None
         except Exception as e:
             logger.error(f"Error resolving tenant: {e}")
             request.state.tenant = None

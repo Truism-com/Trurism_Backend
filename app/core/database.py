@@ -95,10 +95,15 @@ async def check_database_health() -> bool:
     Returns:
         bool: True if database is healthy, False otherwise
     """
+    import asyncio
     try:
+        # Use a strict 10s timeout for health checks
         async with AsyncSessionLocal() as session:
-            result = await session.execute(text("SELECT 1"))
+            result = await asyncio.wait_for(session.execute(text("SELECT 1")), timeout=10.0)
             return result.scalar() == 1
+    except asyncio.TimeoutError:
+        logging.error("Database health check timed out after 10s")
+        return False
     except Exception as e:
         logging.error(f"Database health check failed: {e}")
         return False

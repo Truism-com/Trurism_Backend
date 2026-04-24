@@ -160,69 +160,79 @@ async def razorpay_webhook(
 ):
     """
     Handle Razorpay webhook events.
-    
+
     This endpoint receives webhook notifications from Razorpay
     for payment events (captured, failed, etc.) to ensure no
     payment is lost even if user closes browser.
-    
+
     **Webhook Configuration in Razorpay Dashboard:**
     - URL: https://yourdomain.com/payments/webhook
     - Events: payment.captured, payment.failed, order.paid, refund.processed
     - Secret: Generate and store in RAZORPAY_WEBHOOK_SECRET env var
-    
+
     **Events Handled:**
     - payment.captured: Update booking to CONFIRMED
     - payment.failed: Mark payment as FAILED
     - order.paid: Backup for payment.captured
     - refund.processed: Update refund status
-    
+
     Args:
         request: FastAPI request with webhook payload
         x_razorpay_signature: Signature header for verification
         db: Database session
-        
+
     Returns:
         dict: Status response
     """
     webhook_service = WebhookService(db)
-    
+
     try:
+        # CRITICAL SECURITY: Reject if signature header is missing
+        if not x_razorpay_signature:
+            logger.warning(f"Webhook rejected: Missing X-Razorpay-Signature header from {request.client.host if request.client else 'unknown'}")
+            return HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing signature header")
+
         # Get raw body for signature verification
         body = await request.body()
         payload_str = body.decode('utf-8')
         payload = json.loads(payload_str)
-        
+
         # Verify webhook signature
-        is_verified = False
-        if x_razorpay_signature:
-            is_verified = webhook_service.verify_webhook_signature(
-                payload_str,
-                x_razorpay_signature
-            )
-        
+        is_verified = webhook_service.verify_webhook_signature(
+            payload_str,
+            x_razorpay_signature
+        )
+
+        # CRITICAL SECURITY: Reject if signature verification fails
+        if not is_verified:
+            logger.warning(f"Webhook rejected: Signature verification failed from {request.client.host if request.client else 'unknown'} for event {payload.get('event', 'unknown')}")
+            return HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Signature verification failed")
+
         # Get event type
         event_type = payload.get('event', '')
-        
-        # Process webhook
+
+        # Process webhook only after successful verification
         webhook_log = await webhook_service.process_webhook(
             event_type=event_type,
             payload=payload,
-            signature=x_razorpay_signature or '',
-            is_verified=is_verified
+            signature=x_razorpay_signature,
+            is_verified=True
         )
-        
-        logger.info(f"Webhook processed: {event_type}, verified: {is_verified}")
-        
+
+        logger.info(f"Webhook processed successfully: {event_type}")
+
         return {
             "status": "ok",
             "event": event_type,
-            "verified": is_verified,
+            "verified": True,
             "processed": webhook_log.is_processed
         }
-        
+
+    except HTTPException as he:
+        raise he
     except Exception as e:
-        logger.error(f"Webhook processing error: {e}")
-        return {"status": "error", "message": str(e)}
+        logger.error(f"Webhook processing error: {e}", exc_info=True)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.post("/refund", response_model=RefundResponse)

@@ -13,6 +13,7 @@ import logging as _logging
 
 # aiosmtplib is an optional dependency. If it is missing from the deployed
 # virtualenv (e.g. stale Azure Oryx build cache), the app must still boot.
+# Callers that use EmailService must check for None before instantiating.
 try:
     from app.services.email import EmailService, EmailTemplate
 except ImportError as _e:
