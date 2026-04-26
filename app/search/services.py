@@ -130,10 +130,8 @@ class FlightSearchService(BaseSearchService):
                 expires_at=datetime.fromisoformat(cached_results["cached_at"]) + timedelta(seconds=settings.search_cache_ttl)
             )
         
-        # Perform search
-        # In a real scenario, this would call _search_flights_xml_agency
-        # For now, we use the mock generator but remove the artificial delay
-        flight_results = await self._search_flights_mock(search_request)
+        # Perform search using the real XML.Agency SOAP client
+        flight_results = await self._search_flights_xml_agency(search_request)
         
         # Apply markups per result
         for result in flight_results:
@@ -160,62 +158,16 @@ class FlightSearchService(BaseSearchService):
             cached=False
         )
     
-    async def _search_flights_mock(self, search_request: FlightSearchRequest) -> List[FlightResult]:
-        """
-        Generate mock flight results without artificial delay.
-        """
-        airlines = ["AirFast", "SkyWings", "JetExpress", "FlyHigh", "AirConnect"]
-        aircraft_types = ["Boeing 737", "Airbus A320", "Boeing 777", "Airbus A350"]
+    async def _search_flights_xml_agency(self, search_request: FlightSearchRequest) -> List[FlightResult]:
+        """Search flights using XML.Agency API (SOAP 1.2)."""
+        from app.search.xml_agency_client import XMLAgencyClient
         
-        results = []
-        num_results = random.randint(5, 15)
+        client = XMLAgencyClient()
+        results, search_guid = await client.search_flights(search_request)
         
-        for i in range(num_results):
-            airline = random.choice(airlines)
-            departure_time = datetime.combine(
-                search_request.depart_date,
-                datetime.min.time().replace(
-                    hour=random.randint(6, 22),
-                    minute=random.choice([0, 15, 30, 45])
-                )
-            )
-            
-            flight_duration = random.randint(1, 8)
-            arrival_time = departure_time + timedelta(hours=flight_duration)
-            
-            base_price = random.randint(3000, 15000)
-            if search_request.travel_class == "business":
-                base_price *= 2.5
-            elif search_request.travel_class == "first":
-                base_price *= 4
-            
-            total_price = base_price * (search_request.adults + search_request.children * 0.75)
-            
-            flight_result = FlightResult(
-                offer_id=f"FL{random.randint(10000, 99999)}",
-                airline=airline,
-                flight_number=f"{airline[:2]}{random.randint(100, 999)}",
-                origin=search_request.origin,
-                destination=search_request.destination,
-                departure_time=departure_time,
-                arrival_time=arrival_time,
-                duration=f"{flight_duration}h {random.randint(0, 59)}m",
-                stops=random.randint(0, 2),
-                aircraft=random.choice(aircraft_types),
-                price=round(total_price, 2),
-                travel_class=search_request.travel_class,
-                baggage_allowance=f"{random.randint(15, 25)}kg",
-                refundable=random.choice([True, False])
-            )
-            results.append(flight_result)
-        
+        # We cap results at max_results and sort by cheapest
         results.sort(key=lambda x: x.price)
         return results[:search_request.max_results]
-    
-    async def _search_flights_xml_agency(self, search_request: FlightSearchRequest) -> List[FlightResult]:
-        """Search flights using XML.Agency API (stub)."""
-        # TODO: Implement actual XML.Agency integration
-        return await self._search_flights_mock(search_request)
 
 
 class HotelSearchService(BaseSearchService):
