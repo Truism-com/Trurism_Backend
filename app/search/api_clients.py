@@ -322,7 +322,7 @@ class BusAPIClient(BaseAPIClient):
         if not self.api_secret:
             return ""
         message = f"{self.api_key}{timestamp}"
-        return hmac.new(
+        return hmac.HMAC(
             self.api_secret.encode(),
             message.encode(),
             hashlib.sha256

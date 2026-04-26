@@ -12,6 +12,8 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
 
+from app.auth.api import get_current_admin_user
+
 from app.core.database import get_database_session
 from app.search.schemas import (
     FlightSearchRequest, HotelSearchRequest, BusSearchRequest,
@@ -294,6 +296,7 @@ async def search_buses_post(
 @router.delete("/cache")
 async def clear_search_cache(
     cache_request: SearchCacheRequest,
+    current_user = Depends(get_current_admin_user),
     db: AsyncSession = Depends(get_database_session)
 ):
     """

@@ -354,7 +354,7 @@ class RazorpayService:
             message = f"{order_id}|{payment_id}"
             
             # Generate signature
-            generated_signature = hmac.new(
+            generated_signature = hmac.HMAC(
                 settings.razorpay_key_secret.encode(),
                 message.encode(),
                 hashlib.sha256
@@ -601,7 +601,7 @@ class WebhookService:
                 logger.error("RAZORPAY_WEBHOOK_SECRET is not configured")
                 return False
             
-            expected_signature = hmac.new(
+            expected_signature = hmac.HMAC(
                 settings.razorpay_webhook_secret.encode(),
                 payload.encode(),
                 hashlib.sha256

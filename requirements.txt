@@ -100,3 +100,4 @@ watchfiles
 wcwidth
 websockets
 wrapt
+xmltodict
