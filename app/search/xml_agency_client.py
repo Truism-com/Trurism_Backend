@@ -157,17 +157,36 @@ class XMLAgencyClient:
             logger.error(f"AeroPrebook failed: {str(e)}")
             return False
 
-    async def book_flight(self, offer_code: str, search_guid: str, passenger_details: List[Dict]) -> str:
+    async def book_flight(self, offer_code: str, search_guid: str, passenger_details: List[Any]) -> str:
         """
         AeroBook - Finalizes PNR ticket issuance. NEVER mock this in production without confirmation!
         """
         client = await self.get_client()
+        
+        # Explicitly map our internal Pydantic dictionaries into the rigid Zeep SOAP array
+        zeep_passengers = []
+        for p in passenger_details:
+            # Handle if p is a Pydantic model vs a raw dict
+            p_dict = p.dict() if hasattr(p, "dict") else p
+            
+            # WSDL dictates these exact TitleCase names
+            zeep_passenger = {
+                "Title": p_dict.get("title", "Mr"),
+                "FirstName": p_dict.get("first_name", ""),
+                "LastName": p_dict.get("last_name", ""),
+                "DateOfBirth": p_dict.get("dob").strftime("%Y-%m-%d") if p_dict.get("dob") else "1990-01-01",
+                "PassengerType": p_dict.get("type", "ADT").upper(),
+                "PassportNumber": p_dict.get("passport_number") or ""
+            }
+            zeep_passengers.append(zeep_passenger)
+            
         params = {
             "Auth": self._get_auth_header(),
             "SearchGuid": search_guid,
             "OfferCode": offer_code,
-            "Passengers": passenger_details
+            "Passengers": {"Passenger": zeep_passengers} # Zeep array wrapping
         }
+        
         try:
             response = await client.service.AeroBook(**params)
             if response.ErrorCode == -1:

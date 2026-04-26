@@ -24,21 +24,44 @@ class PassengerSchema(BaseModel):
     Validates passenger details for flight, hotel, and bus bookings
     including personal information and travel preferences.
     """
-    name: str = Field(..., min_length=2, max_length=255, description="Passenger full name")
-    age: int = Field(..., ge=0, le=120, description="Passenger age")
+    title: str = Field(..., pattern="^(Mr|Mrs|Ms|Miss|Dr|Mstr)$", description="Passenger title prefix")
+    first_name: str = Field(..., min_length=2, max_length=100, description="Passenger first name")
+    last_name: str = Field(..., min_length=2, max_length=100, description="Passenger last name")
     type: PassengerType = Field(..., description="Passenger type (ADT, CHD, INF)")
+    dob: date = Field(..., description="Passenger date of birth")
     passport_number: Optional[str] = Field(None, min_length=6, max_length=20, description="Passport number for international travel")
     nationality: Optional[str] = Field(None, min_length=2, max_length=3, description="ISO country code")
     phone: Optional[str] = Field(None, min_length=10, max_length=20, description="Contact phone number")
     email: Optional[str] = Field(None, description="Contact email address")
     
-    @field_validator('name')
+    @field_validator('first_name', 'last_name')
     @classmethod
     def validate_name(cls, v: str) -> str:
         """Validate passenger name format."""
         if not v.replace(' ', '').replace('-', '').isalpha():
             raise ValueError('Name should contain only letters, spaces, and hyphens')
         return v.title()
+    
+    @field_validator('dob')
+    @classmethod
+    def validate_dob(cls, v: date, info) -> date:
+        """Ensure date of birth aligns with passenger type rules"""
+        passenger_type = info.data.get('type')
+        if not passenger_type:
+            return v
+            
+        today = date.today()
+        # Calculate age roughly for business rules validation
+        age = today.year - v.year - ((today.month, today.day) < (v.month, v.day))
+        
+        if passenger_type == PassengerType.INFANT and age >= 2:
+            raise ValueError("Infants must be beneath 2 years of age at travel time.")
+        elif passenger_type == PassengerType.CHILD and (age < 2 or age > 11):
+            raise ValueError("Children must be between 2 and 11 years of age.")
+        elif passenger_type == PassengerType.ADULT and age < 12:
+            raise ValueError("Adult passengers must be 12 years or older.")
+            
+        return v
     
     @field_validator('phone')
     @classmethod
