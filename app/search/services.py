@@ -51,12 +51,7 @@ class BaseSearchService:
         return str(uuid.uuid4())
     
     def _get_cache_key(self, search_type: str, search_params: Dict[str, Any]) -> str:
-        """Generate cache key for search parameters.
-
-        Uses SHA-256 over the normalised params so the key is stable across
-        workers and restarts, which is required for cross-process cache hits
-        and for ``search_id`` portability between deployments.
-        """
+        """Generate cache key for search parameters using a stable SHA-256 digest."""
         # Include tenant_id in cache key for brand-specific results/pricing
         search_params["tenant_id"] = self.tenant_id
         params_str = json.dumps(search_params, sort_keys=True, default=str)
