@@ -37,8 +37,9 @@ class XMLAgencyClient:
         self.api_login = settings.xml_agency_username or "test"
         self.api_password = settings.xml_agency_password or "test"
         
-        # XML.Agency specific WSDL. We use the test base URL if empty
-        base_url = settings.xml_agency_base_url if settings.xml_agency_base_url != "https://api.xmlagency.com" else "http://api.xml.agency"
+        # XML.Agency specific WSDL. Use the configured base URL as-is,
+        # falling back only when it is not configured.
+        base_url = settings.xml_agency_base_url or "https://api.xmlagency.com"
         self.wsdl_url = f"{base_url}/flightv3.17/?wsdl"
         
         self._client = None
