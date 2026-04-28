@@ -1,0 +1,24 @@
+name: Dependency Submission
+
+on:
+  push:
+    branches:
+      - master
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  dependency-submission:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Dependency submission (Python)
+        uses: actions/component-detection-dependency-submission-action@v3
+        continue-on-error: true
+        with:
+          # Our project is at the root, but pointing directly to the manifest helps the detection tool
+          manifest-path: requirements.txt
