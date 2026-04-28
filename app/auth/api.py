@@ -85,22 +85,28 @@ async def get_current_user(
 async def get_current_admin_user(current_user: User = Depends(get_current_user)) -> User:
     """
     Get current user and verify admin role.
-    
-    This dependency ensures only admin users can access admin endpoints.
-    
-    Args:
-        current_user: Current authenticated user
-        
-    Returns:
-        User: Current authenticated admin user
-        
-    Raises:
-        HTTPException: If user is not an admin
+
+    Accepts both tenant-scoped admins and platform superadmins.
     """
     if not current_user.is_admin:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Admin access required"
+        )
+    return current_user
+
+
+async def get_current_superadmin_user(current_user: User = Depends(get_current_user)) -> User:
+    """
+    Get current user and verify superadmin role.
+
+    Only platform-level superadmins pass this check.
+    Used for cross-tenant operations like tenant CRUD.
+    """
+    if not current_user.is_superadmin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Superadmin access required"
         )
     return current_user
 

@@ -156,6 +156,7 @@ async def verify_payment(
 async def razorpay_webhook(
     request: Request,
     x_razorpay_signature: Optional[str] = Header(None),
+    x_razorpay_event_id: Optional[str] = Header(None),
     db: AsyncSession = Depends(get_database_session)
 ):
     """
@@ -216,7 +217,8 @@ async def razorpay_webhook(
             event_type=event_type,
             payload=payload,
             signature=x_razorpay_signature,
-            is_verified=True
+            is_verified=True,
+            razorpay_event_id=x_razorpay_event_id
         )
 
         logger.info(f"Webhook processed successfully: {event_type}")

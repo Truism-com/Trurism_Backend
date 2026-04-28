@@ -117,6 +117,7 @@ class FlightBookingRequest(BaseModel):
     Validates flight booking data including passenger information,
     flight details, and payment information.
     """
+    search_id: str = Field(..., description="Search ID from the original flight search")
     offer_id: str = Field(..., description="Flight offer ID from search results")
     passengers: List[PassengerSchema] = Field(..., min_items=1, max_items=9, description="List of passengers")
     payment_details: PaymentDetailsSchema = Field(..., description="Payment information")

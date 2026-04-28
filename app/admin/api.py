@@ -50,7 +50,7 @@ async def get_dashboard_stats(
         DashboardStatsResponse: Dashboard statistics and metrics
     """
     try:
-        analytics_service = AdminAnalyticsService(db)
+        analytics_service = AdminAnalyticsService(db, tenant_id=current_admin.tenant_id)
         stats = await analytics_service.get_dashboard_stats()
         return DashboardStatsResponse(**stats)
     except Exception as e:
@@ -91,7 +91,7 @@ async def get_all_users(
     try:
         skip = (page - 1) * size
         
-        user_service = AdminUserService(db)
+        user_service = AdminUserService(db, tenant_id=current_admin.tenant_id)
         users, total_count = await user_service.get_all_users(
             skip=skip,
             limit=size,
@@ -162,7 +162,7 @@ async def get_user_details(
         HTTPException: If user not found
     """
     try:
-        user_service = AdminUserService(db)
+        user_service = AdminUserService(db, tenant_id=current_admin.tenant_id)
         user = await user_service.get_user_by_id(user_id)
         
         if not user:
@@ -223,7 +223,7 @@ async def approve_agent(
         HTTPException: If agent not found or not an agent
     """
     try:
-        user_service = AdminUserService(db)
+        user_service = AdminUserService(db, tenant_id=current_admin.tenant_id)
         updated_agent = await user_service.approve_agent(
             agent_id, approval_request, current_admin
         )
@@ -272,7 +272,7 @@ async def update_user_status(
         HTTPException: If user not found
     """
     try:
-        user_service = AdminUserService(db)
+        user_service = AdminUserService(db, tenant_id=current_admin.tenant_id)
         updated_user = await user_service.update_user_status(
             user_id, status_request, current_admin
         )
@@ -339,7 +339,7 @@ async def get_all_bookings(
         if date_to:
             date_to_obj = datetime.strptime(date_to, "%Y-%m-%d").date()
         
-        booking_service = AdminBookingService(db)
+        booking_service = AdminBookingService(db, tenant_id=current_admin.tenant_id)
         bookings, total_count = await booking_service.get_all_bookings(
             skip=skip,
             limit=size,
@@ -407,7 +407,7 @@ async def update_booking_status(
         HTTPException: If booking not found
     """
     try:
-        booking_service = AdminBookingService(db)
+        booking_service = AdminBookingService(db, tenant_id=current_admin.tenant_id)
         success = await booking_service.update_booking_status(
             booking_id, booking_type, status_request, current_admin
         )
@@ -485,7 +485,7 @@ async def get_booking_analytics(
             group_by=group_by
         )
         
-        analytics_service = AdminAnalyticsService(db)
+        analytics_service = AdminAnalyticsService(db, tenant_id=current_admin.tenant_id)
         analytics_data = await analytics_service.get_booking_analytics(analytics_request)
         
         return BookingAnalyticsResponse(**analytics_data)

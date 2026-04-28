@@ -21,14 +21,16 @@ from app.core.mixins import TenantMixin
 class UserRole(str, enum.Enum):
     """
     User roles in the travel booking system.
-    
+
     - CUSTOMER: Regular users who can make bookings
     - AGENT: Travel agents who can make bookings for customers
-    - ADMIN: System administrators with full access
+    - ADMIN: Tenant-scoped administrator for a white-label portal
+    - SUPERADMIN: Platform owner with cross-tenant access
     """
     CUSTOMER = "customer"
     AGENT = "agent"
     ADMIN = "admin"
+    SUPERADMIN = "superadmin"
 
 
 class AgentApprovalStatus(str, enum.Enum):
@@ -102,8 +104,13 @@ class User(Base, TenantMixin):
     
     @property
     def is_admin(self) -> bool:
-        """Check if user is an administrator."""
-        return self.role == UserRole.ADMIN
+        """Check if user is an administrator (tenant admin or superadmin)."""
+        return self.role in (UserRole.ADMIN, UserRole.SUPERADMIN)
+
+    @property
+    def is_superadmin(self) -> bool:
+        """Check if user is the platform-level superadmin."""
+        return self.role == UserRole.SUPERADMIN
     
     @property
     def is_approved_agent(self) -> bool:

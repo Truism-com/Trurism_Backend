@@ -47,7 +47,15 @@ class UserRegisterRequest(BaseModel):
     role: UserRole = UserRole.CUSTOMER
     company_name: Optional[str] = None  # Required for agents
     pan_number: Optional[str] = None    # Required for agents
-    
+
+    @field_validator('role')
+    @classmethod
+    def validate_role(cls, v: UserRole) -> UserRole:
+        """Only customer and agent can self-register."""
+        if v in (UserRole.ADMIN, UserRole.SUPERADMIN):
+            raise ValueError('Cannot self-register with admin privileges')
+        return v
+
     @field_validator('password')
     @classmethod
     def validate_password(cls, v: str) -> str:

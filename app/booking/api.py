@@ -55,21 +55,52 @@ async def create_flight_booking(
         HTTPException: If booking creation fails or payment fails
     """
     try:
-        # TODO: Get actual flight data from search results using offer_id
-        # For now, using mock flight data
-        flight_data = {
-            "price": 7500.0,
-            "airline": "AirFast",
-            "flight_number": "AF123",
-            "origin": "DEL",
-            "destination": "BOM",
-            "departure_time": "2025-01-15T06:00:00",
-            "arrival_time": "2025-01-15T09:00:00",
-            "travel_class": "economy"
-        }
+        from app.core.config import settings
+        import redis.asyncio as aioredis
+        import json
+        from app.search.xml_agency_client import XMLAgencyClient
+        
+        flight_data = None
+        search_guid = None
+        
+        # 1. Retrieve the cached search results using search_id
+        if settings.redis_url and settings.redis_url.lower() != "none":
+            redis_client = aioredis.from_url(settings.redis_url, decode_responses=True)
+            try:
+                cache_key = f"search:flight:{booking_request.search_id}"
+                cached_data_str = await redis_client.get(cache_key)
+                if cached_data_str:
+                    cached_data = json.loads(cached_data_str)
+                    search_guid = cached_data.get("search_guid")
+                    # Find specific flight by offer_id
+                    for result in cached_data.get("results", []):
+                        if result.get("offer_id") == booking_request.offer_id:
+                            flight_data = result
+                            break
+            finally:
+                await redis_client.aclose()
+                
+        if not flight_data or not search_guid:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Flight offer has expired or is invalid. Please search again."
+            )
+            
+        # 2. AeroPrebook: Validate the fare is still bookable with the airline
+        xml_client = XMLAgencyClient()
+        is_bookable = await xml_client.prebook_flight(booking_request.offer_id, search_guid)
+        if not is_bookable:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="This flight is no longer available at the quoted price. Please search again."
+            )
         
         tenant_id = getattr(request.state, "tenant_id", None)
         booking_service = FlightBookingService(db, tenant_id=tenant_id)
+        
+        # Pass the search_guid into the booking service so it can be saved for AeroBook phase
+        flight_data["search_guid"] = search_guid
+        
         # Track who created this booking (for B2B agent tracking)
         booking = await booking_service.create_flight_booking(
             current_user, booking_request, flight_data, created_by_user=current_user
@@ -77,7 +108,11 @@ async def create_flight_booking(
         
         return FlightBookingResponse.model_validate(booking)
         
+    except HTTPException:
+        raise
     except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"Flight booking creation failed: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Flight booking creation failed: {str(e)}"

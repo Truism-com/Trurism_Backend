@@ -6,19 +6,22 @@ It uses 'zeep' for robust parsing of the WSDL envelope.
 """
 
 import logging
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple
 from datetime import datetime, timedelta
 import asyncio
+import os
 
 try:
     from zeep import AsyncClient
     from zeep.transports import AsyncTransport
+    from zeep.cache import SqliteCache
     import httpx
 except ImportError:
     logger = logging.getLogger(__name__)
     logger.error("zeep package not installed. Missing dependency for XML.Agency API.")
 
 from app.search.schemas import FlightSearchRequest, FlightResult, TravelClass
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -29,19 +32,30 @@ class XMLAgencyClient:
     Handles AeroSearch, AeroPrebook, and AeroBook SOAP bindings.
     """
     
-    # Normally read from env, but per project rules, hardcoded test defaults here for scaffold
-    WSDL_URL = "http://api.xml.agency/flightv3.17/?wsdl"
-    
-    def __init__(self, api_login: str = "test", api_password: str = "test"):
-        self.api_login = api_login
-        self.api_password = api_password
+    def __init__(self):
+        # Retrieve from settings or fallback to test sandbox per rules
+        self.api_login = settings.xml_agency_username or "test"
+        self.api_password = settings.xml_agency_password or "test"
+        
+        # XML.Agency specific WSDL. We use the test base URL if empty
+        base_url = settings.xml_agency_base_url if settings.xml_agency_base_url != "https://api.xmlagency.com" else "http://api.xml.agency"
+        self.wsdl_url = f"{base_url}/flightv3.17/?wsdl"
+        
         self._client = None
 
     async def get_client(self):
-        """Lazy-load the Zeep Async SOAP client."""
+        """Lazy-load the Zeep Async SOAP client with SQLite caching."""
         if self._client is None:
-            transport = AsyncTransport(client=httpx.AsyncClient(timeout=30.0))
-            self._client = AsyncClient(self.WSDL_URL, transport=transport)
+            # Use SqliteCache to avoid downloading WSDL on every worker boot
+            cache_path = os.path.join(os.path.expanduser("~"), ".zeep_cache.sqlite")
+            cache = SqliteCache(path=cache_path, timeout=86400) # Cache WSDL for 24 hours
+            
+            # Transport with configured timeout and caching
+            transport = AsyncTransport(
+                client=httpx.AsyncClient(timeout=settings.xml_agency_timeout),
+                cache=cache
+            )
+            self._client = AsyncClient(self.wsdl_url, transport=transport)
         return self._client
 
     def _get_auth_header(self) -> Dict[str, str]:

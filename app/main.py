@@ -410,7 +410,7 @@ async def manual_init_db(
     from app.core.security import SecurityManager
     payload = await SecurityManager.verify_token(credentials.credentials, "access")
     role = payload.get("role", "")
-    if role != "admin":
+    if role not in ("admin", "superadmin"):
         return JSONResponse(
             status_code=403,
             content={"detail": "Admin access required"}

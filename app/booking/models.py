@@ -141,6 +141,7 @@ class FlightBooking(Base, TenantMixin):
     departure_time = Column(DateTime(timezone=True), nullable=False)
     arrival_time = Column(DateTime(timezone=True), nullable=False)
     travel_class = Column(String(20), nullable=False)
+    search_guid = Column(String(100), nullable=True)  # Store XML.Agency SearchGuid for AeroBook phase
     
     # Passenger information
     passenger_count = Column(Integer, nullable=False)
