@@ -537,10 +537,10 @@ class RazorpayService:
             
             if booking:
                 booking.payment_status = PaymentStatus.SUCCESS
-                booking.status = BookingStatus.CONFIRMED
                 
                 if transaction.booking_type == 'flight' and booking.search_guid:
-                    # Execute real AeroBook via XML.Agency Phase 3
+                    # Execute real AeroBook via XML.Agency Phase 3.
+                    # Only transition to CONFIRMED after a successful PNR is returned.
                     from app.search.xml_agency_client import XMLAgencyClient
                     xml_client = XMLAgencyClient()
                     
@@ -552,16 +552,20 @@ class RazorpayService:
                             booking.passenger_details
                         )
                         if pnr:
+                            booking.status = BookingStatus.CONFIRMED
                             booking.confirmation_number = pnr
                         else:
-                            # AeroBook failed but payment was captured. Real-world scenario requires manual queue
-                            booking.confirmation_number = "FAILED_TICKETING"
+                            # AeroBook returned no PNR. Payment captured but ticket not issued.
+                            booking.status = BookingStatus.TICKETING_FAILED
+                            booking.confirmation_number = None
                             logger.error(f"Ticketing failed for captured payment on booking ID {booking.id}. Manual intervention required.")
                     except Exception as xml_err:
-                        booking.confirmation_number = "FAILED_TICKETING"
-                        logger.error(f"AeroBook critical failure: {xml_err}")
+                        booking.status = BookingStatus.TICKETING_FAILED
+                        booking.confirmation_number = None
+                        logger.error(f"AeroBook critical failure for booking ID {booking.id}: {xml_err}")
                 else:
                     # Mock for hotels/buses until integrated
+                    booking.status = BookingStatus.CONFIRMED
                     booking.confirmation_number = f"{transaction.booking_type.upper()[:2]}{booking.id:06d}"
                 
                 await self.db.commit()
@@ -649,20 +653,22 @@ class WebhookService:
         """
         Process webhook event and log it.
         """
-        # Idempotency check: if event_id is provided, check if we already processed it
-        if razorpay_event_id:
+        # Idempotency check: prefer the caller-supplied event ID; fall back to the
+        # top-level "id" field that Razorpay always includes in the webhook body.
+        resolved_event_id = razorpay_event_id or payload.get("id")
+        if resolved_event_id:
             existing = await self.db.execute(
-                select(WebhookLog).where(WebhookLog.razorpay_event_id == razorpay_event_id)
+                select(WebhookLog).where(WebhookLog.razorpay_event_id == resolved_event_id)
             )
             existing_log = existing.scalar_one_or_none()
             if existing_log:
-                logger.info(f"Webhook already processed: {razorpay_event_id}")
+                logger.info(f"Webhook already processed: {resolved_event_id}")
                 return existing_log
 
         # Create webhook log
         webhook_log = WebhookLog(
             event_type=event_type,
-            razorpay_event_id=razorpay_event_id,
+            razorpay_event_id=resolved_event_id,
             payload=payload,
             signature=signature,
             is_verified=is_verified

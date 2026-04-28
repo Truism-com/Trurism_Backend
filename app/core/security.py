@@ -10,7 +10,7 @@ This module provides security-related functionality including:
 
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
-from jose import jwt, JWTError
+from jose import jwt, JWTError, ExpiredSignatureError
 from passlib.context import CryptContext
 from fastapi import HTTPException, status
 import hashlib
@@ -95,13 +95,13 @@ class SecurityManager:
 
         except HTTPException:
             raise
-        except jwt.ExpiredSignatureError:
+        except ExpiredSignatureError:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Token has expired",
                 headers={"WWW-Authenticate": "Bearer"},
             )
-        except jwt.JWTError:
+        except JWTError:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Could not validate credentials",
