@@ -12,6 +12,8 @@ This module defines FastAPI endpoints for booking operations:
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
+import json
+import logging
 
 from app.core.database import get_database_session
 from app.core.redis import get_redis_client
@@ -56,7 +58,6 @@ async def create_flight_booking(
         HTTPException: If booking creation fails or payment fails
     """
     try:
-        import json
         from app.search.xml_agency_client import XMLAgencyClient
         
         flight_data = None
@@ -82,7 +83,6 @@ async def create_flight_booking(
                         flight_data = result
                         break
         except Exception as redis_err:
-            import logging
             logging.getLogger(__name__).error(f"Redis read error during booking: {redis_err}", exc_info=True)
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -120,7 +120,6 @@ async def create_flight_booking(
     except HTTPException:
         raise
     except Exception as e:
-        import logging
         logging.getLogger(__name__).error(f"Flight booking creation failed: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
