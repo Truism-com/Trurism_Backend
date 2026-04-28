@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
 
 from app.core.database import get_database_session
+from app.core.redis import get_redis_client
 from app.auth.api import get_current_user
 from app.auth.models import User
 from app.booking.schemas import (
@@ -55,31 +56,39 @@ async def create_flight_booking(
         HTTPException: If booking creation fails or payment fails
     """
     try:
-        from app.core.config import settings
-        import redis.asyncio as aioredis
         import json
         from app.search.xml_agency_client import XMLAgencyClient
         
         flight_data = None
         search_guid = None
         
-        # 1. Retrieve the cached search results using search_id
-        if settings.redis_url and settings.redis_url.lower() != "none":
-            redis_client = aioredis.from_url(settings.redis_url, decode_responses=True)
-            try:
-                cache_key = f"search:flight:{booking_request.search_id}"
-                cached_data_str = await redis_client.get(cache_key)
-                if cached_data_str:
-                    cached_data = json.loads(cached_data_str)
-                    search_guid = cached_data.get("search_guid")
-                    # Find specific flight by offer_id
-                    for result in cached_data.get("results", []):
-                        if result.get("offer_id") == booking_request.offer_id:
-                            flight_data = result
-                            break
-            finally:
-                await redis_client.aclose()
-                
+        # 1. Retrieve the cached search results using the shared Redis pool.
+        redis_client = get_redis_client()
+        if redis_client is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Search cache is unavailable. Please try again later."
+            )
+
+        cache_key = f"search:flight:{booking_request.search_id}"
+        try:
+            cached_data_str = await redis_client.get(cache_key)
+            if cached_data_str:
+                cached_data = json.loads(cached_data_str)
+                search_guid = cached_data.get("search_guid")
+                # Find specific flight by offer_id
+                for result in cached_data.get("results", []):
+                    if result.get("offer_id") == booking_request.offer_id:
+                        flight_data = result
+                        break
+        except Exception as redis_err:
+            import logging
+            logging.getLogger(__name__).error(f"Redis read error during booking: {redis_err}", exc_info=True)
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Search cache is unavailable. Please try again later."
+            )
+
         if not flight_data or not search_guid:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
