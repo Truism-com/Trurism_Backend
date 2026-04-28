@@ -10,6 +10,7 @@ This module contains business logic for search operations:
 """
 
 import asyncio
+import hashlib
 import json
 from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime, timedelta
@@ -50,11 +51,12 @@ class BaseSearchService:
         return str(uuid.uuid4())
     
     def _get_cache_key(self, search_type: str, search_params: Dict[str, Any]) -> str:
-        """Generate cache key for search parameters."""
+        """Generate cache key for search parameters using a stable SHA-256 digest."""
         # Include tenant_id in cache key for brand-specific results/pricing
         search_params["tenant_id"] = self.tenant_id
         params_str = json.dumps(search_params, sort_keys=True, default=str)
-        return f"search:{search_type}:{hash(params_str)}"
+        digest = hashlib.sha256(params_str.encode()).hexdigest()
+        return f"search:{search_type}:{digest}"
     
     async def _get_cached_results(self, cache_key: str) -> Optional[Dict[str, Any]]:
         """Get cached search results."""
