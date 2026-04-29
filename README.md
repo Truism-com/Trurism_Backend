@@ -115,7 +115,33 @@ This application is containerized and optimized for Azure Application Services.
 *   Razorpay API integrations and secure webhook ingestion
 *   XML.Agency SOAP 1.2 client construction via Zeep
 
-### Phase 3: Platform Stabilization (In Progress)
-*   Unit Test coverage enforcement
+### Phase 3: Platform Stabilization (Complete)
+*   Unit Test coverage enforcement via Pytest
 *   Automated staging environments via GitHub Actions
 *   Database seeding utilities for local development
+*   Strict multi-tenant security scopes and Webhook Idempotency
+
+## Multi-Tenant Administration Hierarchy
+
+Trurism now operates on a strict multi-tiered administration model:
+- **`CUSTOMER`**: Regular booking users.
+- **`AGENT`**: B2B accounts.
+- **`ADMIN`**: Tenant-scoped administrators. Can only manage users/bookings within their specific White-label `tenant_id`.
+- **`SUPERADMIN`**: Platform owners. Bypasses tenant scoping to manage platform-wide operations and create new tenants.
+
+To grant yourself `superadmin` access locally after running migrations:
+```bash
+python scripts/promote_superadmin.py your-email@example.com
+```
+
+## Running Tests
+
+We enforce strict test coverage, especially for business logic, schema validation, and authorization boundaries.
+
+```bash
+# Run the complete test suite
+pytest
+
+# Run tests with coverage report
+pytest --cov=app tests/
+```

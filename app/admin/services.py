@@ -27,14 +27,15 @@ from app.admin.schemas import (
 class AdminUserService:
     """
     Admin service for user management operations.
-    
-    This service handles user oversight, agent approval workflow,
-    and user status management for administrative purposes.
+
+    Supports tenant-scoped queries for tenant admins and
+    global queries for superadmins.
     """
-    
-    def __init__(self, db: AsyncSession):
+
+    def __init__(self, db: AsyncSession, tenant_id: Optional[int] = None):
         self.db = db
-    
+        self.tenant_id = tenant_id
+
     async def get_all_users(
         self,
         skip: int = 0,
@@ -43,44 +44,36 @@ class AdminUserService:
         status_filter: Optional[bool] = None,
         approval_status_filter: Optional[AgentApprovalStatus] = None
     ) -> Tuple[List[User], int]:
-        """
-        Get all users with filtering and pagination.
-        
-        Args:
-            skip: Number of records to skip
-            limit: Maximum number of records to return
-            role_filter: Filter by user role
-            status_filter: Filter by active status
-            approval_status_filter: Filter by agent approval status
-            
-        Returns:
-            Tuple[List[User], int]: List of users and total count
-        """
-        query = select(User)
-        
-        # Apply filters
+        """Get all users with filtering, pagination, and tenant scoping."""
+        conditions = []
+
+        if self.tenant_id is not None:
+            conditions.append(User.tenant_id == self.tenant_id)
+
         if role_filter:
-            query = query.where(User.role == role_filter)
-        
+            conditions.append(User.role == role_filter)
+
         if status_filter is not None:
-            query = query.where(User.is_active == status_filter)
-        
+            conditions.append(User.is_active == status_filter)
+
         if approval_status_filter:
-            query = query.where(User.approval_status == approval_status_filter)
-        
-        # Get total count
+            conditions.append(User.approval_status == approval_status_filter)
+
         count_query = select(func.count(User.id))
-        for condition in query.whereclause.children if hasattr(query.whereclause, 'children') else []:
-            count_query = count_query.where(condition)
-        
+        for cond in conditions:
+            count_query = count_query.where(cond)
+
         total_result = await self.db.execute(count_query)
         total_count = total_result.scalar()
-        
-        # Get paginated results
+
+        query = select(User)
+        for cond in conditions:
+            query = query.where(cond)
         query = query.order_by(User.created_at.desc()).offset(skip).limit(limit)
+
         result = await self.db.execute(query)
         users = result.scalars().all()
-        
+
         return users, total_count
     
     async def get_user_by_id(self, user_id: int) -> Optional[User]:
@@ -205,16 +198,18 @@ class AdminUserService:
 
 
 class AdminBookingService:
-    """
-    Admin service for booking management operations.
-    
-    This service handles booking oversight, status management,
-    and booking analytics for administrative purposes.
-    """
-    
-    def __init__(self, db: AsyncSession):
+    """Admin service for booking management with tenant scoping."""
+
+    def __init__(self, db: AsyncSession, tenant_id: Optional[int] = None):
         self.db = db
-    
+        self.tenant_id = tenant_id
+
+    def _apply_tenant_filter(self, query, model):
+        if self.tenant_id is not None:
+            query = query.where(model.tenant_id == self.tenant_id)
+        return query
+
+
     async def get_all_bookings(
         self,
         skip: int = 0,
@@ -225,27 +220,13 @@ class AdminBookingService:
         date_from: Optional[date] = None,
         date_to: Optional[date] = None
     ) -> Tuple[List[Dict[str, Any]], int]:
-        """
-        Get all bookings with filtering and pagination.
-        
-        Args:
-            skip: Number of records to skip
-            limit: Maximum number of records to return
-            booking_type_filter: Filter by booking type (flight, hotel, bus)
-            status_filter: Filter by booking status
-            payment_status_filter: Filter by payment status
-            date_from: Filter bookings from date
-            date_to: Filter bookings to date
-            
-        Returns:
-            Tuple[List[Dict], int]: List of bookings and total count
-        """
+        """Get all bookings with filtering, pagination, and tenant scoping."""
         all_bookings = []
-        
-        # Get flight bookings
+
         if not booking_type_filter or booking_type_filter == "flight":
             flight_query = select(FlightBooking, User).join(User).where(User.id == FlightBooking.user_id)
-            
+            flight_query = self._apply_tenant_filter(flight_query, FlightBooking)
+
             if status_filter:
                 flight_query = flight_query.where(FlightBooking.status == status_filter)
             if payment_status_filter:
@@ -286,7 +267,8 @@ class AdminBookingService:
         # Get hotel bookings
         if not booking_type_filter or booking_type_filter == "hotel":
             hotel_query = select(HotelBooking, User).join(User).where(User.id == HotelBooking.user_id)
-            
+            hotel_query = self._apply_tenant_filter(hotel_query, HotelBooking)
+
             if status_filter:
                 hotel_query = hotel_query.where(HotelBooking.status == status_filter)
             if payment_status_filter:
@@ -328,7 +310,8 @@ class AdminBookingService:
         # Get bus bookings
         if not booking_type_filter or booking_type_filter == "bus":
             bus_query = select(BusBooking, User).join(User).where(User.id == BusBooking.user_id)
-            
+            bus_query = self._apply_tenant_filter(bus_query, BusBooking)
+
             if status_filter:
                 bus_query = bus_query.where(BusBooking.status == status_filter)
             if payment_status_filter:
@@ -379,181 +362,225 @@ class AdminBookingService:
         booking_id: int,
         booking_type: str,
         status_request: BookingStatusUpdateRequest,
-        admin_user: User
+        admin_user: User,
     ) -> bool:
-        """
-        Update booking status.
-        
-        Args:
-            booking_id: Booking ID to update
-            booking_type: Type of booking (flight, hotel, bus)
-            status_request: Status update details
-            admin_user: Admin user performing the action
-            
-        Returns:
-            bool: True if update successful
-            
-        Raises:
-            HTTPException: If booking not found
-        """
-        booking = None
-        
-        if booking_type == "flight":
-            result = await self.db.execute(select(FlightBooking).where(FlightBooking.id == booking_id))
-            booking = result.scalar_one_or_none()
-        elif booking_type == "hotel":
-            result = await self.db.execute(select(HotelBooking).where(HotelBooking.id == booking_id))
-            booking = result.scalar_one_or_none()
-        elif booking_type == "bus":
-            result = await self.db.execute(select(BusBooking).where(BusBooking.id == booking_id))
-            booking = result.scalar_one_or_none()
-        
+        """Update booking status with tenant isolation."""
+        model_map = {
+            "flight": FlightBooking,
+            "hotel": HotelBooking,
+            "bus": BusBooking,
+        }
+        model = model_map.get(booking_type)
+        if not model:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid booking type: {booking_type}",
+            )
+
+        query = select(model).where(model.id == booking_id)
+        query = self._apply_tenant_filter(query, model)
+
+        result = await self.db.execute(query)
+        booking = result.scalar_one_or_none()
+
         if not booking:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Booking not found"
+                detail="Booking not found",
             )
-        
-        # Update booking status
+
         booking.status = status_request.status
-        
         await self.db.commit()
-        
-        # TODO: Log admin action
-        # await self._log_admin_action(admin_user, "update_booking_status", booking_id, status_request.dict())
-        
+
+        logger.info(
+            "Booking %s/%d status updated to %s by admin %d",
+            booking_type, booking_id, status_request.status, admin_user.id,
+        )
+
         return True
 
 
 class AdminAnalyticsService:
-    """
-    Admin service for analytics and reporting operations.
-    
-    This service handles dashboard metrics calculation,
-    booking analytics, and system reporting.
-    """
-    
-    def __init__(self, db: AsyncSession):
+    """Admin analytics with tenant scoping and real metric calculations."""
+
+    def __init__(self, db: AsyncSession, tenant_id: Optional[int] = None):
         self.db = db
-    
+        self.tenant_id = tenant_id
+
+    def _scoped_count(self, model, *extra_conditions):
+        """Build a COUNT query with optional tenant scoping."""
+        q = select(func.count(model.id))
+        if self.tenant_id is not None and hasattr(model, "tenant_id"):
+            q = q.where(model.tenant_id == self.tenant_id)
+        for cond in extra_conditions:
+            q = q.where(cond)
+        return q
+
+    def _scoped_sum(self, model, column, *extra_conditions):
+        """Build a SUM query with optional tenant scoping."""
+        q = select(func.coalesce(func.sum(column), 0))
+        if self.tenant_id is not None and hasattr(model, "tenant_id"):
+            q = q.where(model.tenant_id == self.tenant_id)
+        for cond in extra_conditions:
+            q = q.where(cond)
+        return q
+
+    def _user_count(self, *extra_conditions):
+        """Build a user COUNT query with optional tenant scoping."""
+        q = select(func.count(User.id))
+        if self.tenant_id is not None:
+            q = q.where(User.tenant_id == self.tenant_id)
+        for cond in extra_conditions:
+            q = q.where(cond)
+        return q
+
     async def get_dashboard_stats(self) -> Dict[str, Any]:
-        """
-        Get dashboard statistics and metrics.
-        
-        Returns:
-            Dict[str, Any]: Dashboard statistics
-        """
-        # User statistics
-        total_users = await self.db.execute(select(func.count(User.id)))
-        total_users_count = total_users.scalar()
-        
-        active_users = await self.db.execute(
-            select(func.count(User.id)).where(User.is_active == True)
-        )
-        active_users_count = active_users.scalar()
-        
-        pending_agents = await self.db.execute(
-            select(func.count(User.id)).where(
-                and_(User.role == UserRole.AGENT, User.approval_status == AgentApprovalStatus.PENDING)
-            )
-        )
-        pending_agents_count = pending_agents.scalar()
-        
-        approved_agents = await self.db.execute(
-            select(func.count(User.id)).where(
-                and_(User.role == UserRole.AGENT, User.approval_status == AgentApprovalStatus.APPROVED)
-            )
-        )
-        approved_agents_count = approved_agents.scalar()
-        
-        # Booking statistics
-        total_flight_bookings = await self.db.execute(select(func.count(FlightBooking.id)))
-        total_hotel_bookings = await self.db.execute(select(func.count(HotelBooking.id)))
-        total_bus_bookings = await self.db.execute(select(func.count(BusBooking.id)))
-        
-        total_bookings_count = (
-            total_flight_bookings.scalar() +
-            total_hotel_bookings.scalar() +
-            total_bus_bookings.scalar()
-        )
-        
-        # Revenue statistics
-        flight_revenue = await self.db.execute(
-            select(func.sum(FlightBooking.total_amount)).where(
-                FlightBooking.payment_status == PaymentStatus.SUCCESS
-            )
-        )
-        hotel_revenue = await self.db.execute(
-            select(func.sum(HotelBooking.total_amount)).where(
-                HotelBooking.payment_status == PaymentStatus.SUCCESS
-            )
-        )
-        bus_revenue = await self.db.execute(
-            select(func.sum(BusBooking.total_amount)).where(
-                BusBooking.payment_status == PaymentStatus.SUCCESS
-            )
-        )
-        
-        total_revenue = (
-            (flight_revenue.scalar() or 0) +
-            (hotel_revenue.scalar() or 0) +
-            (bus_revenue.scalar() or 0)
-        )
-        
-        # Today's statistics
+        """Calculate real dashboard statistics from database."""
         today = datetime.utcnow().date()
         today_start = datetime.combine(today, datetime.min.time())
         today_end = datetime.combine(today, datetime.max.time())
-        
-        bookings_today = await self.db.execute(
-            select(func.count(FlightBooking.id)).where(
-                FlightBooking.created_at >= today_start,
-                FlightBooking.created_at <= today_end
-            )
-        )
-        
-        # Calculate averages and rates
-        average_booking_value = total_revenue / total_bookings_count if total_bookings_count > 0 else 0
-        
+        month_start = datetime.combine(today.replace(day=1), datetime.min.time())
+
+        booking_models = (FlightBooking, HotelBooking, BusBooking)
+
+        total_users = (await self.db.execute(self._user_count())).scalar()
+        active_users = (await self.db.execute(self._user_count(User.is_active == True))).scalar()
+
+        pending_agents = (await self.db.execute(self._user_count(
+            User.role == UserRole.AGENT,
+            User.approval_status == AgentApprovalStatus.PENDING,
+        ))).scalar()
+
+        approved_agents = (await self.db.execute(self._user_count(
+            User.role == UserRole.AGENT,
+            User.approval_status == AgentApprovalStatus.APPROVED,
+        ))).scalar()
+
+        new_users_today = (await self.db.execute(self._user_count(
+            User.created_at >= today_start,
+            User.created_at <= today_end,
+        ))).scalar()
+
+        agent_apps_today = (await self.db.execute(self._user_count(
+            User.role == UserRole.AGENT,
+            User.approval_status == AgentApprovalStatus.PENDING,
+            User.created_at >= today_start,
+            User.created_at <= today_end,
+        ))).scalar()
+
+        total_bookings = sum([
+            (await self.db.execute(self._scoped_count(m))).scalar()
+            for m in booking_models
+        ])
+
+        confirmed_bookings = sum([
+            (await self.db.execute(self._scoped_count(m, m.status == BookingStatus.CONFIRMED))).scalar()
+            for m in booking_models
+        ])
+        cancelled_bookings = sum([
+            (await self.db.execute(self._scoped_count(m, m.status == BookingStatus.CANCELLED))).scalar()
+            for m in booking_models
+        ])
+        pending_bookings = sum([
+            (await self.db.execute(self._scoped_count(m, m.status == BookingStatus.PENDING))).scalar()
+            for m in booking_models
+        ])
+
+        total_revenue = sum([
+            (await self.db.execute(self._scoped_sum(
+                m, m.total_amount, m.payment_status == PaymentStatus.SUCCESS
+            ))).scalar()
+            for m in booking_models
+        ])
+
+        revenue_today = sum([
+            (await self.db.execute(self._scoped_sum(
+                m, m.total_amount, m.payment_status == PaymentStatus.SUCCESS,
+                m.created_at >= today_start, m.created_at <= today_end,
+            ))).scalar()
+            for m in booking_models
+        ])
+
+        revenue_this_month = sum([
+            (await self.db.execute(self._scoped_sum(
+                m, m.total_amount, m.payment_status == PaymentStatus.SUCCESS,
+                m.created_at >= month_start, m.created_at <= today_end,
+            ))).scalar()
+            for m in booking_models
+        ])
+
+        bookings_today = sum([
+            (await self.db.execute(self._scoped_count(
+                m, m.created_at >= today_start, m.created_at <= today_end
+            ))).scalar()
+            for m in booking_models
+        ])
+
+        cancellations_today = sum([
+            (await self.db.execute(self._scoped_count(
+                m, m.status == BookingStatus.CANCELLED,
+                m.updated_at >= today_start, m.updated_at <= today_end,
+            ))).scalar()
+            for m in booking_models
+        ])
+
+        avg_booking = round(total_revenue / total_bookings, 2) if total_bookings > 0 else 0
+        booking_success_rate = round((confirmed_bookings / total_bookings) * 100, 1) if total_bookings > 0 else 0
+        cancellation_rate = round((cancelled_bookings / total_bookings) * 100, 1) if total_bookings > 0 else 0
+        resolved = confirmed_bookings + cancelled_bookings
+        payment_success_rate = round((confirmed_bookings / resolved) * 100, 1) if resolved > 0 else 0
+
         return {
-            "total_users": total_users_count,
-            "active_users": active_users_count,
-            "pending_agents": pending_agents_count,
-            "approved_agents": approved_agents_count,
-            "total_bookings": total_bookings_count,
+            "total_users": total_users,
+            "active_users": active_users,
+            "pending_agents": pending_agents,
+            "approved_agents": approved_agents,
+            "total_bookings": total_bookings,
             "total_revenue": round(total_revenue, 2),
-            "average_booking_value": round(average_booking_value, 2),
-            "bookings_today": bookings_today.scalar() or 0,
-            "revenue_today": 0,  # TODO: Calculate today's revenue
-            "revenue_this_month": 0,  # TODO: Calculate monthly revenue
-            "cancellations_today": 0,  # TODO: Calculate today's cancellations
-            "new_users_today": 0,  # TODO: Calculate today's new users
-            "agent_applications_today": 0,  # TODO: Calculate today's agent applications
-            "booking_success_rate": 95.0,  # TODO: Calculate actual success rate
-            "cancellation_rate": 5.0,  # TODO: Calculate actual cancellation rate
-            "payment_success_rate": 98.0,  # TODO: Calculate actual payment success rate
-            "confirmed_bookings": 0,  # TODO: Calculate confirmed bookings
-            "cancelled_bookings": 0,  # TODO: Calculate cancelled bookings
-            "pending_bookings": 0,  # TODO: Calculate pending bookings
+            "average_booking_value": avg_booking,
+            "bookings_today": bookings_today,
+            "revenue_today": round(revenue_today, 2),
+            "revenue_this_month": round(revenue_this_month, 2),
+            "cancellations_today": cancellations_today,
+            "new_users_today": new_users_today,
+            "agent_applications_today": agent_apps_today,
+            "booking_success_rate": booking_success_rate,
+            "cancellation_rate": cancellation_rate,
+            "payment_success_rate": payment_success_rate,
+            "confirmed_bookings": confirmed_bookings,
+            "cancelled_bookings": cancelled_bookings,
+            "pending_bookings": pending_bookings,
         }
-    
+
     async def get_booking_analytics(self, analytics_request: BookingAnalyticsRequest) -> Dict[str, Any]:
-        """
-        Get booking analytics for specified period and filters.
-        
-        Args:
-            analytics_request: Analytics request parameters
-            
-        Returns:
-            Dict[str, Any]: Analytics data
-        """
-        # TODO: Implement detailed booking analytics
-        # This would include time-series data, revenue trends, booking patterns, etc.
-        
+        """Get booking analytics for specified period with tenant scoping."""
+        start = datetime.combine(analytics_request.start_date, datetime.min.time())
+        end = datetime.combine(analytics_request.end_date, datetime.max.time())
+
+        booking_models = (FlightBooking, HotelBooking, BusBooking)
+
+        total = sum([
+            (await self.db.execute(self._scoped_count(
+                m, m.created_at >= start, m.created_at <= end
+            ))).scalar()
+            for m in booking_models
+        ])
+
+        revenue = sum([
+            (await self.db.execute(self._scoped_sum(
+                m, m.total_amount, m.payment_status == PaymentStatus.SUCCESS,
+                m.created_at >= start, m.created_at <= end,
+            ))).scalar()
+            for m in booking_models
+        ])
+
+        avg_value = round(revenue / total, 2) if total > 0 else 0
+
         return {
             "period": f"{analytics_request.start_date} to {analytics_request.end_date}",
-            "total_bookings": 0,
-            "total_revenue": 0.0,
-            "average_booking_value": 0.0,
-            "data_points": []
+            "total_bookings": total,
+            "total_revenue": round(revenue, 2),
+            "average_booking_value": avg_value,
+            "data_points": [],
         }
+

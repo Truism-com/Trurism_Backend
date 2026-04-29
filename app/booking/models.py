@@ -24,13 +24,15 @@ class BookingStatus(str, enum.Enum):
     Booking status enumeration for tracking booking lifecycle.
     
     - PENDING: Booking created but payment not confirmed
-    - CONFIRMED: Booking confirmed and payment successful
+    - CONFIRMED: Booking confirmed, payment successful, and ticket issued
+    - TICKETING_FAILED: Payment captured but airline ticketing failed; requires manual intervention
     - CANCELLED: Booking cancelled by user or system
     - REFUNDED: Booking cancelled and refund processed
     - EXPIRED: Booking expired due to timeout
     """
     PENDING = "pending"
     CONFIRMED = "confirmed"
+    TICKETING_FAILED = "ticketing_failed"
     CANCELLED = "cancelled"
     REFUNDED = "refunded"
     EXPIRED = "expired"
@@ -141,6 +143,7 @@ class FlightBooking(Base, TenantMixin):
     departure_time = Column(DateTime(timezone=True), nullable=False)
     arrival_time = Column(DateTime(timezone=True), nullable=False)
     travel_class = Column(String(20), nullable=False)
+    search_guid = Column(String(100), nullable=True)  # Store XML.Agency SearchGuid for AeroBook phase
     
     # Passenger information
     passenger_count = Column(Integer, nullable=False)

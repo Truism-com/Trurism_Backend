@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional
 
 from app.core.database import get_database_session
-from app.auth.api import get_current_admin_user
+from app.auth.api import get_current_admin_user, get_current_superadmin_user
 from app.auth.models import User
 from app.tenant.models import Tenant
 from app.tenant.schemas import (
@@ -84,7 +84,7 @@ async def get_public_config(
 @router.post("/admin/tenants", response_model=TenantResponse, status_code=status.HTTP_201_CREATED)
 async def create_tenant(
     tenant_data: TenantCreate,
-    current_admin: User = Depends(get_current_admin_user),
+    current_admin: User = Depends(get_current_superadmin_user),
     db: AsyncSession = Depends(get_database_session)
 ):
     """
@@ -110,7 +110,7 @@ async def list_tenants(
     page: int = Query(1, ge=1, description="Page number"),
     size: int = Query(50, ge=1, le=100, description="Items per page"),
     active_only: bool = Query(False, description="Filter only active tenants"),
-    current_admin: User = Depends(get_current_admin_user),
+    current_admin: User = Depends(get_current_superadmin_user),
     db: AsyncSession = Depends(get_database_session)
 ):
     """
@@ -148,7 +148,7 @@ async def list_tenants(
 @router.get("/admin/tenants/{tenant_id}", response_model=TenantResponse)
 async def get_tenant(
     tenant_id: int,
-    current_admin: User = Depends(get_current_admin_user),
+    current_admin: User = Depends(get_current_superadmin_user),
     db: AsyncSession = Depends(get_database_session)
 ):
     """
@@ -219,7 +219,7 @@ async def update_branding(
 async def update_tenant_config(
     tenant_id: int,
     config_data: TenantConfigUpdate,
-    current_admin: User = Depends(get_current_admin_user),
+    current_admin: User = Depends(get_current_superadmin_user),
     db: AsyncSession = Depends(get_database_session)
 ):
     """
@@ -244,7 +244,7 @@ async def update_tenant_config(
 @router.delete("/admin/tenants/{tenant_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_tenant(
     tenant_id: int,
-    current_admin: User = Depends(get_current_admin_user),
+    current_admin: User = Depends(get_current_superadmin_user),
     db: AsyncSession = Depends(get_database_session)
 ):
     """

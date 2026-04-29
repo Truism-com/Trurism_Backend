@@ -10,13 +10,14 @@ This module contains business logic for search operations:
 """
 
 import asyncio
+import hashlib
 import json
-import redis.asyncio as redis
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime, timedelta
 import uuid
 import random
 import httpx
+import logging
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.search.schemas import (
@@ -24,13 +25,9 @@ from app.search.schemas import (
     FlightResult, HotelResult, BusResult, SearchResponse
 )
 from app.core.config import settings
+from app.core.redis import get_redis_client
 
-# Redis client for search result caching (async)
-if settings.redis_url and settings.redis_url.lower() != "none":
-    redis_client = redis.from_url(settings.redis_url, encoding="utf-8", decode_responses=True)
-else:
-    redis_client = None
-
+logger = logging.getLogger(__name__)
 
 from app.markup.services import MarkupService
 from app.markup.models import ServiceType
@@ -45,7 +42,7 @@ class BaseSearchService:
     
     def __init__(self, db: AsyncSession, tenant_id: Optional[int] = None):
         self.db = db
-        self.redis = redis_client
+        self.redis = get_redis_client()
         self.tenant_id = tenant_id
         self.markup_service = MarkupService(db)
     
@@ -54,11 +51,12 @@ class BaseSearchService:
         return str(uuid.uuid4())
     
     def _get_cache_key(self, search_type: str, search_params: Dict[str, Any]) -> str:
-        """Generate cache key for search parameters."""
+        """Generate cache key for search parameters using a stable SHA-256 digest."""
         # Include tenant_id in cache key for brand-specific results/pricing
         search_params["tenant_id"] = self.tenant_id
         params_str = json.dumps(search_params, sort_keys=True, default=str)
-        return f"search:{search_type}:{hash(params_str)}"
+        digest = hashlib.sha256(params_str.encode()).hexdigest()
+        return f"search:{search_type}:{digest}"
     
     async def _get_cached_results(self, cache_key: str) -> Optional[Dict[str, Any]]:
         """Get cached search results."""
@@ -113,10 +111,10 @@ class FlightSearchService(BaseSearchService):
         Search for available flights.
         """
         start_time = datetime.utcnow()
-        search_id = self._generate_search_id()
-        
         # Generate cache key
         cache_key = self._get_cache_key("flight", search_request.dict())
+        search_id = cache_key.replace("search:flight:", "")
+        
         
         # Try to get cached results
         cached_results = await self._get_cached_results(cache_key)
@@ -131,7 +129,7 @@ class FlightSearchService(BaseSearchService):
             )
         
         # Perform search using the real XML.Agency SOAP client
-        flight_results = await self._search_flights_xml_agency(search_request)
+        flight_results, search_guid = await self._search_flights_xml_agency(search_request)
         
         # Apply markups per result
         for result in flight_results:
@@ -143,6 +141,7 @@ class FlightSearchService(BaseSearchService):
         
         # Prepare response
         response_data = {
+            "search_guid": search_guid,
             "total_results": len(flight_results),
             "results": [result.dict() for result in flight_results]
         }
@@ -158,7 +157,7 @@ class FlightSearchService(BaseSearchService):
             cached=False
         )
     
-    async def _search_flights_xml_agency(self, search_request: FlightSearchRequest) -> List[FlightResult]:
+    async def _search_flights_xml_agency(self, search_request: FlightSearchRequest) -> Tuple[List[FlightResult], str]:
         """Search flights using XML.Agency API (SOAP 1.2)."""
         from app.search.xml_agency_client import XMLAgencyClient
         
@@ -167,7 +166,7 @@ class FlightSearchService(BaseSearchService):
         
         # We cap results at max_results and sort by cheapest
         results.sort(key=lambda x: x.price)
-        return results[:search_request.max_results]
+        return results[:search_request.max_results], search_guid
 
 
 class HotelSearchService(BaseSearchService):
@@ -180,9 +179,9 @@ class HotelSearchService(BaseSearchService):
         Search for available hotels.
         """
         start_time = datetime.utcnow()
-        search_id = self._generate_search_id()
-        
         cache_key = self._get_cache_key("hotel", search_request.dict())
+        search_id = cache_key.replace("search:hotel:", "")
+        
         
         cached_results = await self._get_cached_results(cache_key)
         if cached_results:
@@ -272,9 +271,9 @@ class BusSearchService(BaseSearchService):
         Search for available buses.
         """
         start_time = datetime.utcnow()
-        search_id = self._generate_search_id()
-        
         cache_key = self._get_cache_key("bus", search_request.dict())
+        search_id = cache_key.replace("search:bus:", "")
+        
         
         cached_results = await self._get_cached_results(cache_key)
         if cached_results:

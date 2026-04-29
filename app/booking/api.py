@@ -12,8 +12,11 @@ This module defines FastAPI endpoints for booking operations:
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
+import json
+import logging
 
 from app.core.database import get_database_session
+from app.core.redis import get_redis_client
 from app.auth.api import get_current_user
 from app.auth.models import User
 from app.booking.schemas import (
@@ -55,21 +58,58 @@ async def create_flight_booking(
         HTTPException: If booking creation fails or payment fails
     """
     try:
-        # TODO: Get actual flight data from search results using offer_id
-        # For now, using mock flight data
-        flight_data = {
-            "price": 7500.0,
-            "airline": "AirFast",
-            "flight_number": "AF123",
-            "origin": "DEL",
-            "destination": "BOM",
-            "departure_time": "2025-01-15T06:00:00",
-            "arrival_time": "2025-01-15T09:00:00",
-            "travel_class": "economy"
-        }
+        from app.search.xml_agency_client import XMLAgencyClient
+        
+        flight_data = None
+        search_guid = None
+        
+        # 1. Retrieve the cached search results using the shared Redis pool.
+        redis_client = get_redis_client()
+        if redis_client is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Search cache is unavailable. Please try again later."
+            )
+
+        cache_key = f"search:flight:{booking_request.search_id}"
+        try:
+            cached_data_str = await redis_client.get(cache_key)
+            if cached_data_str:
+                cached_data = json.loads(cached_data_str)
+                search_guid = cached_data.get("search_guid")
+                # Find specific flight by offer_id
+                for result in cached_data.get("results", []):
+                    if result.get("offer_id") == booking_request.offer_id:
+                        flight_data = result
+                        break
+        except Exception as redis_err:
+            logging.getLogger(__name__).error(f"Redis read error during booking: {redis_err}", exc_info=True)
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Search cache is unavailable. Please try again later."
+            )
+
+        if not flight_data or not search_guid:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Flight offer has expired or is invalid. Please search again."
+            )
+            
+        # 2. AeroPrebook: Validate the fare is still bookable with the airline
+        xml_client = XMLAgencyClient()
+        is_bookable = await xml_client.prebook_flight(booking_request.offer_id, search_guid)
+        if not is_bookable:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="This flight is no longer available at the quoted price. Please search again."
+            )
         
         tenant_id = getattr(request.state, "tenant_id", None)
         booking_service = FlightBookingService(db, tenant_id=tenant_id)
+        
+        # Pass the search_guid into the booking service so it can be saved for AeroBook phase
+        flight_data["search_guid"] = search_guid
+        
         # Track who created this booking (for B2B agent tracking)
         booking = await booking_service.create_flight_booking(
             current_user, booking_request, flight_data, created_by_user=current_user
@@ -77,7 +117,10 @@ async def create_flight_booking(
         
         return FlightBookingResponse.model_validate(booking)
         
+    except HTTPException:
+        raise
     except Exception as e:
+        logging.getLogger(__name__).error(f"Flight booking creation failed: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Flight booking creation failed: {str(e)}"

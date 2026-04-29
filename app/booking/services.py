@@ -54,28 +54,8 @@ class BaseBookingService:
         return datetime.utcnow() + timedelta(hours=hours)
     
     async def _process_payment(self, payment_details: Dict[str, Any], amount: float) -> Dict[str, Any]:
-        """
-        Process payment for booking.
-        
-        This is a mock implementation without artificial delay.
-        """
-        # Mock payment processing - 95% success rate for production baseline
-        is_successful = random.random() > 0.05
-        
-        if is_successful:
-            return {
-                "status": PaymentStatus.SUCCESS,
-                "transaction_id": f"TXN{datetime.utcnow().strftime('%Y%m%d%H%M%S')}{random.randint(1000, 9999)}",
-                "gateway_response": "Payment successful",
-                "processed_at": datetime.utcnow()
-            }
-        else:
-            return {
-                "status": PaymentStatus.FAILED,
-                "transaction_id": None,
-                "gateway_response": "Payment declined",
-                "processed_at": datetime.utcnow()
-            }
+        """Subclasses must use BookingPaymentProcessor instead."""
+        raise NotImplementedError("Use BookingPaymentProcessor for real payment processing")
 
 
 from app.booking.payment_processor import BookingPaymentProcessor, PaymentMode
@@ -141,9 +121,10 @@ class FlightBookingService(BaseBookingService):
                 flight_number=flight_data.get('flight_number', ''),
                 origin=flight_data.get('origin', ''),
                 destination=flight_data.get('destination', ''),
-                departure_time=datetime.fromisoformat(flight_data.get('departure_time', '')),
-                arrival_time=datetime.fromisoformat(flight_data.get('arrival_time', '')),
+                departure_time=datetime.fromisoformat(flight_data.get('departure_time', '').replace('Z', '+00:00')),
+                arrival_time=datetime.fromisoformat(flight_data.get('arrival_time', '').replace('Z', '+00:00')),
                 travel_class=flight_data.get('travel_class', 'economy'),
+                search_guid=flight_data.get('search_guid'),
                 passenger_count=len(booking_request.passengers),
                 passenger_details=[passenger.dict() for passenger in booking_request.passengers],
                 base_fare=base_fare,
