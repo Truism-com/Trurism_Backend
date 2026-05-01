@@ -20,10 +20,12 @@ from app.auth.models import User
 from app.auth.schemas import (
     UserRegisterRequest, UserLoginRequest, TokenResponse,
     RefreshTokenRequest, UserProfileResponse, UserProfileUpdate,
-    PasswordChangeRequest
+    PasswordChangeRequest,
+    ForgotPasswordRequest, ResetPasswordRequest,
 )
 from app.auth.services import AuthService
 from app.core.config import settings
+from app.services import email as email_service
 
 # Router for authentication endpoints
 router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -357,3 +359,41 @@ async def change_password(
     auth_service = AuthService(db)
     await auth_service.change_password(current_user.id, password_data)
     return {"message": "Password changed successfully"}
+
+
+@router.post("/forgot-password",status_code=status.HTTP_200_OK)
+async def forgot_password(
+    request_data: ForgotPasswordRequest,
+    db:AsyncSession = Depends(get_database_session)
+):
+    """request password reset otp
+    always returns 200 to avoid leaking if the email is registered or not"""
+    
+    from app.services.email import email_service
+    auth_service = AuthService(db)
+    otp = await auth_service.generate_and_store_otp(request_data.email)
+    
+    if otp:
+        await email_service.send_otp(
+            to_email=request_data.email,
+            otp=otp,
+            purpose="password reset"
+        )
+    
+    return {"message": "OTP has been semt to the given email"}
+
+@router.post("/reset_password",status_code=status.HTTP_200_OK)
+async def reset_password(
+    request_data : ResetPasswordRequest,
+    db: AsyncSession = Depends(get_database_session)
+):
+    """reset password using otp
+    verify otp and then update the password
+    return 400 if the otp is invalid """
+    auth_service = AuthService(db)
+    await auth_service.verify_otp_and_reset_password(
+        email=request_data.email,
+        otp=request_data.otp,
+        new_password=request_data.new_password
+    )
+    return {"message":"password reset successfully"}
