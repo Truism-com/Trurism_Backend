@@ -36,6 +36,7 @@ from app.auth.api import router as auth_router
 from app.search.api import router as search_router
 from app.booking.api import router as booking_router
 from app.admin.api import router as admin_router
+from app.superadmin.api import router as superadmin_router
 from app.api_keys.api import router as api_keys_router
 from app.tenant.api import router as tenant_router
 from app.markup.api import router as markup_router
@@ -433,6 +434,7 @@ app.include_router(auth_router)
 app.include_router(search_router)
 app.include_router(booking_router)
 app.include_router(admin_router)
+app.include_router(superadmin_router)
 app.include_router(api_keys_router)
 app.include_router(tenant_router)
 app.include_router(markup_router)

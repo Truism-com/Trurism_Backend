@@ -8,11 +8,15 @@ This module defines FastAPI endpoints for authentication operations:
 - Password change functionality
 """
 
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Dict, Any
 from datetime import timedelta
+
+logger = logging.getLogger(__name__)
 
 from app.core.database import get_database_session
 from app.core.security import SecurityManager
@@ -195,7 +199,7 @@ async def login_user(
         
         refresh_token = SecurityManager.create_refresh_token(data=token_data)
     except Exception as token_err:
-        logging.error(f"Token creation failed: {str(token_err)}", exc_info=True)
+        logger.error("Token creation failed: %s", token_err, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Authentication failed"
@@ -208,12 +212,12 @@ async def login_user(
         
         # CRITICAL: Check expiration is not None (prevents SQL constraint errors)
         if expires_at is None:
-            logging.warning(f"Token expiration extraction failed for user {user.id}, skipping DB persistence")
+            logger.warning("Token expiration extraction failed for user %d, skipping DB persistence", user.id)
         else:
             await auth_service.create_refresh_token_record(user.id, refresh_token, expires_at)
     except Exception as db_err:
         # If storing refresh token fails, log but don't block login (keep flow resilient)
-        logging.warning(f"Failed to persist refresh token for user {user.id}: {str(db_err)}")
+        logger.warning("Failed to persist refresh token for user %d: %s", user.id, db_err)
     
     return TokenResponse(
         access_token=access_token,
@@ -400,7 +404,7 @@ async def forgot_password(
             purpose="password reset"
         )
     
-    return {"message": "OTP has been semt to the given email"}
+    return {"message": "OTP has been sent to the given email"}
 
 @router.post("/reset_password",status_code=status.HTTP_200_OK)
 async def reset_password(

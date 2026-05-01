@@ -149,3 +149,6 @@ class TokenBlacklist(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True)  # Optional, for audit trail
     expires_at = Column(DateTime(timezone=True), nullable=False, index=True)  # When token naturally expires
     blacklisted_at = Column(DateTime(timezone=True), server_default=func.now())  # When it was blacklisted
+
+
+

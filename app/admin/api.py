@@ -100,10 +100,13 @@ async def get_all_users(
             approval_status_filter=approval_status
         )
         
+        # Batch fetch booking counts — 3 queries for entire page (was 3*N)
+        user_ids = [u.id for u in users]
+        booking_counts = await user_service.get_user_booking_count_batch(user_ids)
+
         # Convert to response format
         user_responses = []
         for user in users:
-            booking_count = await user_service.get_user_booking_count(user.id)
             user_responses.append(UserManagementResponse(
                 id=user.id,
                 email=user.email,
@@ -116,7 +119,7 @@ async def get_all_users(
                 pan_number=user.pan_number,
                 created_at=user.created_at,
                 last_login=user.last_login,
-                total_bookings=booking_count
+                total_bookings=booking_counts.get(user.id, 0)
             ))
         
         total_pages = (total_count + size - 1) // size
@@ -299,7 +302,7 @@ async def get_all_bookings(
     page: int = Query(1, ge=1, description="Page number"),
     size: int = Query(50, ge=1, le=100, description="Number of bookings per page"),
     booking_type: Optional[str] = Query(None, description="Filter by booking type"),
-    status: Optional[BookingStatus] = Query(None, description="Filter by booking status"),
+    booking_status: Optional[BookingStatus] = Query(None, description="Filter by booking status"),
     payment_status: Optional[PaymentStatus] = Query(None, description="Filter by payment status"),
     date_from: Optional[str] = Query(None, description="Filter from date (YYYY-MM-DD)"),
     date_to: Optional[str] = Query(None, description="Filter to date (YYYY-MM-DD)"),
@@ -344,7 +347,7 @@ async def get_all_bookings(
             skip=skip,
             limit=size,
             booking_type_filter=booking_type,
-            status_filter=status,
+            status_filter=booking_status,
             payment_status_filter=payment_status,
             date_from=date_from_obj,
             date_to=date_to_obj
@@ -439,7 +442,7 @@ async def get_booking_analytics(
     start_date: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
     end_date: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
     booking_type: Optional[str] = Query(None, description="Filter by booking type"),
-    status: Optional[BookingStatus] = Query(None, description="Filter by booking status"),
+    booking_status: Optional[BookingStatus] = Query(None, description="Filter by booking status"),
     payment_status: Optional[PaymentStatus] = Query(None, description="Filter by payment status"),
     group_by: str = Query("day", description="Group results by (day, week, month)"),
     current_admin: User = Depends(get_current_admin_user),
@@ -465,22 +468,18 @@ async def get_booking_analytics(
         BookingAnalyticsResponse: Analytics data
     """
     try:
-        # Parse dates
-        from datetime import datetime, date
-        
-        start_date_obj = None
-        end_date_obj = None
-        
-        if start_date:
-            start_date_obj = datetime.strptime(start_date, "%Y-%m-%d").date()
-        if end_date:
-            end_date_obj = datetime.strptime(end_date, "%Y-%m-%d").date()
-        
+        # Parse dates — default to last 30 days when not supplied (fixes B4 NoneType crash)
+        from datetime import datetime, date, timedelta
+
+        today = date.today()
+        start_date_obj = datetime.strptime(start_date, "%Y-%m-%d").date() if start_date else today - timedelta(days=30)
+        end_date_obj = datetime.strptime(end_date, "%Y-%m-%d").date() if end_date else today
+
         analytics_request = BookingAnalyticsRequest(
             start_date=start_date_obj,
             end_date=end_date_obj,
             booking_type=booking_type,
-            status=status,
+            status=booking_status,
             payment_status=payment_status,
             group_by=group_by
         )

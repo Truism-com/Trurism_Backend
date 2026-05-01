@@ -174,27 +174,34 @@ class AdminUserService:
         
         return user
     
+    async def get_user_booking_count_batch(self, user_ids: List[int]) -> Dict[int, int]:
+        """
+        Batch-fetch booking counts for a list of user_ids.
+        Single pass: 3 COUNT queries (one per booking type) instead of 3*N.
+        Returns {user_id: total_booking_count}.
+        """
+        counts: Dict[int, int] = {user_id: 0 for user_id in user_ids}
+
+        for model in (FlightBooking, HotelBooking, BusBooking):
+            result = await self.db.execute(
+                select(model.user_id, func.count(model.id).label("cnt"))
+                .where(model.user_id.in_(user_ids))
+                .group_by(model.user_id)
+            )
+            for row in result.all():
+                counts[row.user_id] = counts.get(row.user_id, 0) + row.cnt
+
+        return counts
+
     async def get_user_booking_count(self, user_id: int) -> int:
-        """Get total booking count for a user."""
-        # Count flight bookings
-        flight_count = await self.db.execute(
-            select(func.count(FlightBooking.id)).where(FlightBooking.user_id == user_id)
-        )
-        flight_total = flight_count.scalar()
-        
-        # Count hotel bookings
-        hotel_count = await self.db.execute(
-            select(func.count(HotelBooking.id)).where(HotelBooking.user_id == user_id)
-        )
-        hotel_total = hotel_count.scalar()
-        
-        # Count bus bookings
-        bus_count = await self.db.execute(
-            select(func.count(BusBooking.id)).where(BusBooking.user_id == user_id)
-        )
-        bus_total = bus_count.scalar()
-        
-        return flight_total + hotel_total + bus_total
+        """Get total booking count for a single user (used in single-user detail view)."""
+        total = 0
+        for model in (FlightBooking, HotelBooking, BusBooking):
+            result = await self.db.execute(
+                select(func.count(model.id)).where(model.user_id == user_id)
+            )
+            total += result.scalar()
+        return total
 
 
 class AdminBookingService:
@@ -220,115 +227,65 @@ class AdminBookingService:
         date_from: Optional[date] = None,
         date_to: Optional[date] = None
     ) -> Tuple[List[Dict[str, Any]], int]:
-        """Get all bookings with filtering, pagination, and tenant scoping."""
-        all_bookings = []
+        """
+        Get bookings with filtering, DB-level pagination, and tenant scoping.
 
+        Fetches total count and paginated rows using DB LIMIT/OFFSET per type.
+        No full-table loads into Python memory.
+        """
+        type_configs = []
         if not booking_type_filter or booking_type_filter == "flight":
-            flight_query = select(FlightBooking, User).join(User).where(User.id == FlightBooking.user_id)
-            flight_query = self._apply_tenant_filter(flight_query, FlightBooking)
-
-            if status_filter:
-                flight_query = flight_query.where(FlightBooking.status == status_filter)
-            if payment_status_filter:
-                flight_query = flight_query.where(FlightBooking.payment_status == payment_status_filter)
-            if date_from:
-                flight_query = flight_query.where(FlightBooking.created_at >= datetime.combine(date_from, datetime.min.time()))
-            if date_to:
-                flight_query = flight_query.where(FlightBooking.created_at <= datetime.combine(date_to, datetime.max.time()))
-            
-            flight_result = await self.db.execute(flight_query)
-            flight_bookings = flight_result.all()
-            
-            for booking, user in flight_bookings:
-                all_bookings.append({
-                    "booking_id": booking.id,
-                    "booking_reference": booking.booking_reference,
-                    "type": "flight",
-                    "user_email": user.email,
-                    "user_name": user.name,
-                    "status": booking.status,
-                    "payment_status": booking.payment_status,
-                    "total_amount": booking.total_amount,
-                    "currency": booking.currency,
-                    "created_at": booking.created_at,
-                    "updated_at": booking.updated_at,
-                    "details": {
-                        "airline": booking.airline,
-                        "flight_number": booking.flight_number,
-                        "origin": booking.origin,
-                        "destination": booking.destination,
-                        "departure_time": booking.departure_time,
-                        "arrival_time": booking.arrival_time,
-                        "travel_class": booking.travel_class,
-                        "passenger_count": booking.passenger_count
-                    }
-                })
-        
-        # Get hotel bookings
+            type_configs.append(("flight", FlightBooking))
         if not booking_type_filter or booking_type_filter == "hotel":
-            hotel_query = select(HotelBooking, User).join(User).where(User.id == HotelBooking.user_id)
-            hotel_query = self._apply_tenant_filter(hotel_query, HotelBooking)
-
-            if status_filter:
-                hotel_query = hotel_query.where(HotelBooking.status == status_filter)
-            if payment_status_filter:
-                hotel_query = hotel_query.where(HotelBooking.payment_status == payment_status_filter)
-            if date_from:
-                hotel_query = hotel_query.where(HotelBooking.created_at >= datetime.combine(date_from, datetime.min.time()))
-            if date_to:
-                hotel_query = hotel_query.where(HotelBooking.created_at <= datetime.combine(date_to, datetime.max.time()))
-            
-            hotel_result = await self.db.execute(hotel_query)
-            hotel_bookings = hotel_result.all()
-            
-            for booking, user in hotel_bookings:
-                all_bookings.append({
-                    "booking_id": booking.id,
-                    "booking_reference": booking.booking_reference,
-                    "type": "hotel",
-                    "user_email": user.email,
-                    "user_name": user.name,
-                    "status": booking.status,
-                    "payment_status": booking.payment_status,
-                    "total_amount": booking.total_amount,
-                    "currency": booking.currency,
-                    "created_at": booking.created_at,
-                    "updated_at": booking.updated_at,
-                    "details": {
-                        "hotel_name": booking.hotel_name,
-                        "hotel_address": booking.hotel_address,
-                        "city": booking.city,
-                        "checkin_date": booking.checkin_date,
-                        "checkout_date": booking.checkout_date,
-                        "nights": booking.nights,
-                        "rooms": booking.rooms,
-                        "adults": booking.adults,
-                        "children": booking.children
-                    }
-                })
-        
-        # Get bus bookings
+            type_configs.append(("hotel", HotelBooking))
         if not booking_type_filter or booking_type_filter == "bus":
-            bus_query = select(BusBooking, User).join(User).where(User.id == BusBooking.user_id)
-            bus_query = self._apply_tenant_filter(bus_query, BusBooking)
+            type_configs.append(("bus", BusBooking))
 
+        def _base_conditions(model):
+            conds = []
+            if self.tenant_id is not None:
+                conds.append(model.tenant_id == self.tenant_id)
             if status_filter:
-                bus_query = bus_query.where(BusBooking.status == status_filter)
+                conds.append(model.status == status_filter)
             if payment_status_filter:
-                bus_query = bus_query.where(BusBooking.payment_status == payment_status_filter)
+                conds.append(model.payment_status == payment_status_filter)
             if date_from:
-                bus_query = bus_query.where(BusBooking.created_at >= datetime.combine(date_from, datetime.min.time()))
+                conds.append(model.created_at >= datetime.combine(date_from, datetime.min.time()))
             if date_to:
-                bus_query = bus_query.where(BusBooking.created_at <= datetime.combine(date_to, datetime.max.time()))
-            
-            bus_result = await self.db.execute(bus_query)
-            bus_bookings = bus_result.all()
-            
-            for booking, user in bus_bookings:
-                all_bookings.append({
+                conds.append(model.created_at <= datetime.combine(date_to, datetime.max.time()))
+            return conds
+
+        # --- total count: 1 COUNT per active type ---
+        total_count = 0
+        for _btype, model in type_configs:
+            conds = _base_conditions(model)
+            q = select(func.count(model.id))
+            if conds:
+                q = q.where(*conds)
+            total_count += (await self.db.execute(q)).scalar()
+
+        # --- paginated rows: fetch skip+limit from each type, merge, re-sort, slice ---
+        # We over-fetch (skip+limit per type) then do a final in-memory sort+slice.
+        # This is bounded: at most 3 * (skip+limit) rows loaded — never the full table.
+        candidate_bookings = []
+
+        for btype, model in type_configs:
+            conds = _base_conditions(model)
+            q = (
+                select(model, User)
+                .join(User, User.id == model.user_id)
+                .order_by(model.created_at.desc())
+                .limit(skip + limit)
+            )
+            if conds:
+                q = q.where(*conds)
+
+            rows = (await self.db.execute(q)).all()
+            for booking, user in rows:
+                entry = {
                     "booking_id": booking.id,
                     "booking_reference": booking.booking_reference,
-                    "type": "bus",
+                    "type": btype,
                     "user_email": user.email,
                     "user_name": user.name,
                     "status": booking.status,
@@ -337,25 +294,34 @@ class AdminBookingService:
                     "currency": booking.currency,
                     "created_at": booking.created_at,
                     "updated_at": booking.updated_at,
-                    "details": {
-                        "operator": booking.operator,
-                        "bus_type": booking.bus_type,
-                        "origin": booking.origin,
-                        "destination": booking.destination,
-                        "departure_time": booking.departure_time,
-                        "arrival_time": booking.arrival_time,
-                        "travel_date": booking.travel_date,
-                        "passengers": booking.passengers
+                }
+                if btype == "flight":
+                    entry["details"] = {
+                        "airline": booking.airline, "flight_number": booking.flight_number,
+                        "origin": booking.origin, "destination": booking.destination,
+                        "departure_time": booking.departure_time, "arrival_time": booking.arrival_time,
+                        "travel_class": booking.travel_class, "passenger_count": booking.passenger_count,
                     }
-                })
-        
-        # Sort by creation date (most recent first)
-        all_bookings.sort(key=lambda x: x["created_at"], reverse=True)
-        
-        total_count = len(all_bookings)
-        paginated_bookings = all_bookings[skip:skip + limit]
-        
-        return paginated_bookings, total_count
+                elif btype == "hotel":
+                    entry["details"] = {
+                        "hotel_name": booking.hotel_name, "hotel_address": booking.hotel_address,
+                        "city": booking.city, "checkin_date": booking.checkin_date,
+                        "checkout_date": booking.checkout_date, "nights": booking.nights,
+                        "rooms": booking.rooms, "adults": booking.adults, "children": booking.children,
+                    }
+                else:  # bus
+                    entry["details"] = {
+                        "operator": booking.operator, "bus_type": booking.bus_type,
+                        "origin": booking.origin, "destination": booking.destination,
+                        "departure_time": booking.departure_time, "arrival_time": booking.arrival_time,
+                        "travel_date": booking.travel_date, "passengers": booking.passengers,
+                    }
+                candidate_bookings.append(entry)
+
+        candidate_bookings.sort(key=lambda x: x["created_at"] or datetime.min, reverse=True)
+        paginated = candidate_bookings[skip: skip + limit]
+
+        return paginated, total_count
     
     async def update_booking_status(
         self,
