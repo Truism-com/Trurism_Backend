@@ -16,6 +16,9 @@ from fastapi import HTTPException, status
 from typing import Optional
 from datetime import datetime
 
+import secrets
+from app.core.redis import get_redis_client
+
 from app.auth.models import User, UserRole, AgentApprovalStatus
 from app.auth.schemas import (
     UserRegisterRequest, UserLoginRequest, UserProfileUpdate,
@@ -252,6 +255,50 @@ class AuthService:
         user.password_hash = SecurityManager.hash_password(password_data.new_password)
         await self.db.commit()
         
+        return True
+    
+    async def generate_and_store_otp(self,email:str)->Optional[str]:
+        """Generate a 6-digit OTP, store it in redis with a 15-min TTL, and return it. Returns none if the iser email does not exists."""
+        user = await self.get_user_by_email(email)
+        if not user:
+            return None
+        
+        otp = str(secrets.randbelow(900000) + 100000)
+        redis =  get_redis_client()
+        if redis:
+            key=f"pwd_reset_otp:{email}"
+            await redis.setex(key,900,otp)
+        else:
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE,detail="OTP service temporarily uunavailable")
+        return otp
+    
+    async def verify_otp_and_reset_password(self,email:str,otp:str,new_password:str)->bool:
+        """
+        Verify the OTP for the given email, reset the password if valid,
+        and delete the OTP key. Raises HTTP 400 on invalid/expired OTP.
+        """
+        redis = get_redis_client()
+        if not redis:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,detail="OTP service temporarily unavailable"
+            )
+        key = f"pwd_reset_otp:{email}"
+        stored_otp = await redis.get(key)
+        
+        if stored_otp is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,detail="Invalid OTP"
+            )
+        
+        user = await self.get_user_by_email(email)
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,detail="user not found"
+            )
+        
+        user.password_hash=SecurityManager.hash_password(new_password)
+        await self.db.commit
+        await redis.delete(key)
         return True
     
     async def get_all_users(self, skip: int = 0, limit: int = 100) -> list[User]:
