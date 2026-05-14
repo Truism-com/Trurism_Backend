@@ -148,8 +148,7 @@ async def register_user(
     except HTTPException:
         raise
     except Exception as e:
-        import logging
-        logging.error(f"Registration failed: {str(e)}", exc_info=True)
+        logger.error(f"Registration failed: {str(e)}", exc_info=True)
         # Do NOT expose internal error details in production
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

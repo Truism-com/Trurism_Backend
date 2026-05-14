@@ -274,7 +274,13 @@ class WalletService:
         if amount <= 0:
             raise ValueError("Amount must be positive")
         
-        wallet = await self.get_wallet_by_user_id(user_id)
+        # Acquire row-level lock to prevent race conditions on concurrent debits
+        result = await self.db.execute(
+            select(Wallet)
+            .where(Wallet.user_id == user_id)
+            .with_for_update()
+        )
+        wallet = result.scalar_one_or_none()
         if not wallet:
             raise WalletNotFoundError(f"Wallet not found for user {user_id}")
         
@@ -389,11 +395,24 @@ class WalletService:
         if amount <= 0:
             raise ValueError("Amount must be positive")
         
-        from_wallet = await self.get_wallet_by_user_id(from_user_id)
+        # Acquire row-level locks on both wallets to prevent race conditions
+        result = await self.db.execute(
+            select(Wallet)
+            .where(Wallet.user_id == from_user_id)
+            .with_for_update()
+        )
+        from_wallet = result.scalar_one_or_none()
         if not from_wallet:
             raise WalletNotFoundError(f"Source wallet not found for user {from_user_id}")
         
+        # Lock destination wallet too (create first if needed)
         to_wallet = await self.get_or_create_wallet(to_user_id)
+        result = await self.db.execute(
+            select(Wallet)
+            .where(Wallet.id == to_wallet.id)
+            .with_for_update()
+        )
+        to_wallet = result.scalar_one_or_none()
         
         await self._validate_wallet(from_wallet)
         await self._validate_wallet(to_wallet)

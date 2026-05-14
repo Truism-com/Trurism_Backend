@@ -44,6 +44,11 @@ class Settings(BaseSettings):
             )
         return v
     
+    # Docs access control — comma-separated IPs allowed to reach /docs, /redoc, /openapi.json.
+    # Leave empty to allow all (open docs). Set to e.g. "1.2.3.4,5.6.7.8" to restrict.
+    # In debug mode the whitelist is bypassed entirely.
+    docs_allowed_ips: str = ""
+    
     # Request Size Limits
     max_request_body_size: int = 10 * 1024 * 1024  # 10MB
     

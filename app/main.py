@@ -219,6 +219,23 @@ app.add_middleware(SlowAPIMiddleware)
 
 
 @app.middleware("http")
+async def gate_docs_by_ip(request: Request, call_next):
+    """Block /docs, /redoc, /openapi.json unless caller IP is whitelisted.
+
+    Bypass entirely when debug=True (local dev) or when DOCS_ALLOWED_IPS is
+    empty (open-access, the current default).
+    """
+    _docs_paths = ("/docs", "/redoc", "/openapi.json")
+    if request.url.path in _docs_paths or request.url.path.startswith(("/docs/", "/redoc/")):
+        if not settings.debug and settings.docs_allowed_ips.strip():
+            allowed = {ip.strip() for ip in settings.docs_allowed_ips.split(",") if ip.strip()}
+            client_ip = request.client.host if request.client else None
+            if client_ip not in allowed:
+                return JSONResponse(status_code=404, content={"detail": "Not Found"})
+    return await call_next(request)
+
+
+@app.middleware("http")
 async def limit_request_body_size(request: Request, call_next):
     """Middleware to enforce request body size limit."""
     content_length = request.headers.get("content-length")

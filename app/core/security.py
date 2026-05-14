@@ -203,6 +203,6 @@ class SecurityManager:
             exp_timestamp = payload.get("exp")
             if exp_timestamp:
                 return datetime.fromtimestamp(exp_timestamp)
-        except jwt.PyJWTError:
+        except JWTError:
             pass
         return None
