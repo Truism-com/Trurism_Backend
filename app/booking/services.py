@@ -59,6 +59,7 @@ class BaseBookingService:
 
 
 from app.booking.payment_processor import BookingPaymentProcessor, PaymentMode
+from app.core.tax import get_tax_rate
 
 class FlightBookingError(Exception):
     """Exception for flight booking errors."""
@@ -107,7 +108,13 @@ class FlightBookingService(BaseBookingService):
             
             # Calculate pricing
             base_fare = flight_data.get('price', 0)
-            taxes = round(base_fare * 0.18, 2)  # 18% taxes
+            is_international = flight_data.get('is_international', False)
+            gst_rate = await get_tax_rate(
+                self.db,
+                "flight_gst_international" if is_international else "flight_gst_domestic",
+                tenant_id=self.tenant_id
+            )
+            taxes = round(base_fare * gst_rate, 2)
             total_amount = round(base_fare + taxes, 2)
             
             # Create flight booking record
@@ -126,7 +133,7 @@ class FlightBookingService(BaseBookingService):
                 travel_class=flight_data.get('travel_class', 'economy'),
                 search_guid=flight_data.get('search_guid'),
                 passenger_count=len(booking_request.passengers),
-                passenger_details=[passenger.dict() for passenger in booking_request.passengers],
+                passenger_details=[passenger.model_dump() for passenger in booking_request.passengers],
                 base_fare=base_fare,
                 taxes=taxes,
                 total_amount=total_amount,
@@ -184,11 +191,15 @@ class FlightBookingService(BaseBookingService):
             
             return flight_booking
             
+        except HTTPException:
+            await self.db.rollback()
+            raise
         except Exception as e:
             await self.db.rollback()
+            logger.error("Flight booking creation failed: %s", e, exc_info=True)
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Flight booking creation failed: {str(e)}"
+                detail="Flight booking failed. Please try again."
             )
     
     async def get_flight_booking(self, booking_id: int, user_id: int) -> Optional[FlightBooking]:
@@ -287,7 +298,10 @@ class HotelBookingService(BaseBookingService):
             nights = (checkout_datetime - checkin_datetime).days
             
             room_rate = hotel_data.get('price_per_night', 0)
-            total_amount = round(room_rate * nights * booking_request.rooms, 2)
+            base_amount = round(room_rate * nights * booking_request.rooms, 2)
+            gst_rate = await get_tax_rate(self.db, "hotel_gst", tenant_id=self.tenant_id)
+            taxes = round(base_amount * gst_rate, 2)
+            total_amount = round(base_amount + taxes, 2)
             
             hotel_booking = HotelBooking(
                 booking_reference=booking_reference,
@@ -306,6 +320,8 @@ class HotelBookingService(BaseBookingService):
                 children=booking_request.children,
                 guest_details=booking_request.guest_details,
                 room_rate=room_rate,
+                base_amount=base_amount,
+                taxes=taxes,
                 total_amount=total_amount,
                 payment_method=payment_mode.value,
                 status=BookingStatus.PENDING,
@@ -350,9 +366,13 @@ class HotelBookingService(BaseBookingService):
             
             return hotel_booking
             
+        except HTTPException:
+            await self.db.rollback()
+            raise
         except Exception as e:
             await self.db.rollback()
-            raise HTTPException(status_code=500, detail=str(e))
+            logger.error("Hotel booking creation failed: %s", e, exc_info=True)
+            raise HTTPException(status_code=500, detail="Hotel booking failed. Please try again.")
 
     async def get_hotel_booking(self, booking_id: int, user_id: int) -> Optional[HotelBooking]:
         """Get hotel booking with tenant isolation."""
@@ -413,7 +433,10 @@ class BusBookingService(BaseBookingService):
             booking_reference = self._generate_booking_reference()
             
             fare_per_passenger = bus_data.get('price', 0)
-            total_amount = round(fare_per_passenger * booking_request.passengers, 2)
+            base_amount = round(fare_per_passenger * booking_request.passengers, 2)
+            gst_rate = await get_tax_rate(self.db, "bus_gst", tenant_id=self.tenant_id)
+            taxes = round(base_amount * gst_rate, 2)
+            total_amount = round(base_amount + taxes, 2)
             
             bus_booking = BusBooking(
                 booking_reference=booking_reference,
@@ -429,8 +452,10 @@ class BusBookingService(BaseBookingService):
                 arrival_time=datetime.fromisoformat(bus_data.get('arrival_time', '')),
                 travel_date=datetime.combine(booking_request.travel_date, datetime.min.time()),
                 passengers=booking_request.passengers,
-                passenger_details=[passenger.dict() for passenger in booking_request.passenger_details],
+                passenger_details=[passenger.model_dump() for passenger in booking_request.passenger_details],
                 fare_per_passenger=fare_per_passenger,
+                base_amount=base_amount,
+                taxes=taxes,
                 total_amount=total_amount,
                 payment_method=payment_mode.value,
                 boarding_point=booking_request.boarding_point,
@@ -477,9 +502,13 @@ class BusBookingService(BaseBookingService):
             
             return bus_booking
             
+        except HTTPException:
+            await self.db.rollback()
+            raise
         except Exception as e:
             await self.db.rollback()
-            raise HTTPException(status_code=500, detail=str(e))
+            logger.error("Bus booking creation failed: %s", e, exc_info=True)
+            raise HTTPException(status_code=500, detail="Bus booking failed. Please try again.")
 
     async def get_bus_booking(self, booking_id: int, user_id: int) -> Optional[BusBooking]:
         """Get bus booking with tenant isolation."""

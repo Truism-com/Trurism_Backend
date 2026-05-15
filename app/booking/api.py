@@ -17,7 +17,7 @@ import logging
 
 from app.core.database import get_database_session
 from app.core.redis import get_redis_client
-from app.auth.api import get_current_user
+from app.auth.api import get_current_user, get_approved_agent
 from app.auth.models import User
 from app.booking.schemas import (
     FlightBookingRequest, HotelBookingRequest, BusBookingRequest,
@@ -35,7 +35,7 @@ router = APIRouter(prefix="/bookings", tags=["Bookings"])
 @router.post("/flights", response_model=FlightBookingResponse, status_code=status.HTTP_201_CREATED)
 async def create_flight_booking(
     booking_request: FlightBookingRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_approved_agent),
     request: Request = None,
     db: AsyncSession = Depends(get_database_session)
 ):
@@ -130,7 +130,7 @@ async def create_flight_booking(
 @router.post("/hotels", response_model=HotelBookingResponse, status_code=status.HTTP_201_CREATED)
 async def create_hotel_booking(
     booking_request: HotelBookingRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_approved_agent),
     request: Request = None,
     db: AsyncSession = Depends(get_database_session)
 ):
@@ -182,7 +182,7 @@ async def create_hotel_booking(
 @router.post("/buses", response_model=BusBookingResponse, status_code=status.HTTP_201_CREATED)
 async def create_bus_booking(
     booking_request: BusBookingRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_approved_agent),
     request: Request = None,
     db: AsyncSession = Depends(get_database_session)
 ):

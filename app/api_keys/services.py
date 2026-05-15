@@ -284,7 +284,7 @@ class APIKeyService:
             return None
         
         # Update fields
-        update_dict = update_data.dict(exclude_unset=True)
+        update_dict = update_data.model_dump(exclude_unset=True)
         if "scopes" in update_dict:
             update_dict["scopes"] = [scope.value for scope in update_dict["scopes"]]
         

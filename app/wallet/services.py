@@ -533,7 +533,10 @@ class WalletService:
         Returns:
             Hold details
         """
-        wallet = await self.get_wallet_by_user_id(user_id)
+        result = await self.db.execute(
+            select(Wallet).where(Wallet.user_id == user_id).with_for_update()
+        )
+        wallet = result.scalar_one_or_none()
         if not wallet:
             raise WalletNotFoundError(f"Wallet not found for user {user_id}")
         

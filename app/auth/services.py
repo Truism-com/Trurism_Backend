@@ -139,17 +139,18 @@ class AuthService:
         await self.db.commit()
         return True
     
-    async def authenticate_user(self, login_data: UserLoginRequest) -> Optional[User]:
+    async def authenticate_user(self, login_data: UserLoginRequest, tenant_id: Optional[int] = None) -> Optional[User]:
         """
         Authenticate user with email and password.
         
         Args:
             login_data (UserLoginRequest): Login credentials
+            tenant_id (Optional[int]): Tenant ID for multi-tenant isolation
             
         Returns:
             Optional[User]: User object if authentication successful, None otherwise
         """
-        user = await self.get_user_by_email(login_data.email)
+        user = await self.get_user_by_email(login_data.email, tenant_id=tenant_id)
         
         if not user or not SecurityManager.verify_password(login_data.password, user.password_hash):
             return None
@@ -166,17 +167,21 @@ class AuthService:
         
         return user
     
-    async def get_user_by_email(self, email: str) -> Optional[User]:
+    async def get_user_by_email(self, email: str, tenant_id: Optional[int] = None) -> Optional[User]:
         """
         Get user by email address.
         
         Args:
             email (str): User email address
+            tenant_id (Optional[int]): Tenant ID for multi-tenant isolation
             
         Returns:
             Optional[User]: User object if found, None otherwise
         """
-        result = await self.db.execute(select(User).where(User.email == email))
+        query = select(User).where(User.email == email)
+        if tenant_id is not None:
+            query = query.where(User.tenant_id == tenant_id)
+        result = await self.db.execute(query)
         return result.scalar_one_or_none()
     
     async def get_user_by_id(self, user_id: int) -> Optional[User]:
@@ -214,7 +219,7 @@ class AuthService:
             )
         
         # Update profile fields
-        update_data = profile_data.dict(exclude_unset=True)
+        update_data = profile_data.model_dump(exclude_unset=True)
         for field, value in update_data.items():
             setattr(user, field, value)
         
@@ -287,6 +292,11 @@ class AuthService:
         
         if stored_otp is None:
             raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,detail="Invalid or expired OTP"
+            )
+        
+        if stored_otp != otp:
+            raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,detail="Invalid OTP"
             )
         
@@ -297,7 +307,7 @@ class AuthService:
             )
         
         user.password_hash=SecurityManager.hash_password(new_password)
-        await self.db.commit
+        await self.db.commit()
         await redis.delete(key)
         return True
     

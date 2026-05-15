@@ -222,12 +222,15 @@ app.add_middleware(SlowAPIMiddleware)
 async def gate_docs_by_ip(request: Request, call_next):
     """Block /docs, /redoc, /openapi.json unless caller IP is whitelisted.
 
-    Bypass entirely when debug=True (local dev) or when DOCS_ALLOWED_IPS is
-    empty (open-access, the current default).
+    In production/staging (debug=False), docs are blocked by default.
+    Set DOCS_ALLOWED_IPS to a comma-separated list of IPs to allow access.
+    In debug mode the whitelist is bypassed entirely.
     """
     _docs_paths = ("/docs", "/redoc", "/openapi.json")
     if request.url.path in _docs_paths or request.url.path.startswith(("/docs/", "/redoc/")):
-        if not settings.debug and settings.docs_allowed_ips.strip():
+        if not settings.debug:
+            if not settings.docs_allowed_ips.strip():
+                return JSONResponse(status_code=404, content={"detail": "Not Found"})
             allowed = {ip.strip() for ip in settings.docs_allowed_ips.split(",") if ip.strip()}
             client_ip = request.client.host if request.client else None
             if client_ip not in allowed:

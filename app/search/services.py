@@ -53,8 +53,8 @@ class BaseSearchService:
     def _get_cache_key(self, search_type: str, search_params: Dict[str, Any]) -> str:
         """Generate cache key for search parameters using a stable SHA-256 digest."""
         # Include tenant_id in cache key for brand-specific results/pricing
-        search_params["tenant_id"] = self.tenant_id
-        params_str = json.dumps(search_params, sort_keys=True, default=str)
+        params_copy = {**search_params, "tenant_id": self.tenant_id}
+        params_str = json.dumps(params_copy, sort_keys=True, default=str)
         digest = hashlib.sha256(params_str.encode()).hexdigest()
         return f"search:{search_type}:{digest}"
     
@@ -112,7 +112,7 @@ class FlightSearchService(BaseSearchService):
         """
         start_time = datetime.utcnow()
         # Generate cache key
-        cache_key = self._get_cache_key("flight", search_request.dict())
+        cache_key = self._get_cache_key("flight", search_request.model_dump())
         search_id = cache_key.replace("search:flight:", "")
         
         
@@ -143,7 +143,7 @@ class FlightSearchService(BaseSearchService):
         response_data = {
             "search_guid": search_guid,
             "total_results": len(flight_results),
-            "results": [result.dict() for result in flight_results]
+            "results": [result.model_dump() for result in flight_results]
         }
         
         # Cache results
@@ -152,7 +152,7 @@ class FlightSearchService(BaseSearchService):
         return SearchResponse(
             search_id=search_id,
             total_results=len(flight_results),
-            results=[result.dict() for result in flight_results],
+            results=[result.model_dump() for result in flight_results],
             search_time=self._calculate_search_time(start_time),
             cached=False
         )
@@ -179,7 +179,7 @@ class HotelSearchService(BaseSearchService):
         Search for available hotels.
         """
         start_time = datetime.utcnow()
-        cache_key = self._get_cache_key("hotel", search_request.dict())
+        cache_key = self._get_cache_key("hotel", search_request.model_dump())
         search_id = cache_key.replace("search:hotel:", "")
         
         
@@ -207,7 +207,7 @@ class HotelSearchService(BaseSearchService):
         
         response_data = {
             "total_results": len(filtered_results),
-            "results": [result.dict() for result in filtered_results]
+            "results": [result.model_dump() for result in filtered_results]
         }
         
         await self._cache_results(cache_key, response_data, settings.search_cache_ttl)
@@ -215,7 +215,7 @@ class HotelSearchService(BaseSearchService):
         return SearchResponse(
             search_id=search_id,
             total_results=len(filtered_results),
-            results=[result.dict() for result in filtered_results],
+            results=[result.model_dump() for result in filtered_results],
             search_time=self._calculate_search_time(start_time),
             cached=False
         )
@@ -271,7 +271,7 @@ class BusSearchService(BaseSearchService):
         Search for available buses.
         """
         start_time = datetime.utcnow()
-        cache_key = self._get_cache_key("bus", search_request.dict())
+        cache_key = self._get_cache_key("bus", search_request.model_dump())
         search_id = cache_key.replace("search:bus:", "")
         
         
@@ -298,7 +298,7 @@ class BusSearchService(BaseSearchService):
         
         response_data = {
             "total_results": len(bus_results),
-            "results": [result.dict() for result in bus_results]
+            "results": [result.model_dump() for result in bus_results]
         }
         
         await self._cache_results(cache_key, response_data, settings.search_cache_ttl)
@@ -306,7 +306,7 @@ class BusSearchService(BaseSearchService):
         return SearchResponse(
             search_id=search_id,
             total_results=len(bus_results),
-            results=[result.dict() for result in bus_results],
+            results=[result.model_dump() for result in bus_results],
             search_time=self._calculate_search_time(start_time),
             cached=False
         )

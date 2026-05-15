@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 from app.core.database import get_database_session
 from app.core.security import SecurityManager
-from app.auth.models import User
+from app.auth.models import User, UserRole
 from app.auth.schemas import (
     UserRegisterRequest, UserLoginRequest, TokenResponse,
     RefreshTokenRequest, UserProfileResponse, UserProfileUpdate,
@@ -117,6 +117,22 @@ async def get_current_superadmin_user(current_user: User = Depends(get_current_u
     return current_user
 
 
+async def get_approved_agent(current_user: User = Depends(get_current_user)) -> User:
+    """
+    Get current user and verify agent is approved.
+
+    Agents must be approved by an admin before they can create bookings.
+    Non-agent users pass through without this check.
+    """
+    if current_user.role == UserRole.AGENT:
+        if not current_user.is_approved_agent:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Agent account pending approval"
+            )
+    return current_user
+
+
 @router.post("/register", response_model=UserProfileResponse, status_code=status.HTTP_201_CREATED)
 async def register_user(
     user_data: UserRegisterRequest,
@@ -159,6 +175,7 @@ async def register_user(
 @router.post("/login", response_model=TokenResponse)
 async def login_user(
     login_data: UserLoginRequest,
+    request: Request,
     db: AsyncSession = Depends(get_database_session)
 ):
     """
@@ -169,6 +186,7 @@ async def login_user(
     
     Args:
         login_data: User login credentials
+        request: Request object (for tenant context)
         db: Database session
         
     Returns:
@@ -177,8 +195,9 @@ async def login_user(
     Raises:
         HTTPException: If credentials are invalid
     """
+    tenant_id = getattr(request.state, "tenant_id", None)
     auth_service = AuthService(db)
-    user = await auth_service.authenticate_user(login_data)
+    user = await auth_service.authenticate_user(login_data, tenant_id=tenant_id)
     
     if not user:
         raise HTTPException(
@@ -290,16 +309,19 @@ async def refresh_access_token(
 
 @router.post("/logout")
 async def logout_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security)
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    refresh_token: str = None,
+    db: AsyncSession = Depends(get_database_session)
 ):
     """
-    Logout user by blacklisting the access token.
+    Logout user by blacklisting the access token and revoking the refresh token.
     
-    Adds the current access token to the blacklist to prevent
-    further use until it naturally expires.
+    Blacklists the current access token and revokes the associated refresh token
+    to prevent token reuse after logout.
     
     Args:
         credentials: HTTP Bearer token credentials
+        refresh_token: Optional refresh token to revoke
         
     Returns:
         Dict: Logout confirmation message
@@ -313,6 +335,11 @@ async def logout_user(
         from datetime import datetime
         expires_at = datetime.fromtimestamp(exp_timestamp)
         await SecurityManager.blacklist_token(token, expires_at)
+    
+    # Revoke refresh token if provided
+    if refresh_token:
+        auth_service = AuthService(db)
+        await auth_service.revoke_refresh_token(refresh_token)
     
     return {"message": "Successfully logged out"}
 

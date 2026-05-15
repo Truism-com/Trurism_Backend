@@ -216,6 +216,8 @@ class HotelBooking(Base, TenantMixin):
     
     # Pricing and payment
     room_rate = Column(Float, nullable=False)  # Rate per night
+    base_amount = Column(Float, nullable=False, default=0.0)
+    taxes = Column(Float, nullable=False, default=0.0)
     total_amount = Column(Float, nullable=False)
     currency = Column(String(3), default="INR")
     payment_method = Column(Enum(PaymentMethod), nullable=False)
@@ -276,6 +278,8 @@ class BusBooking(Base, TenantMixin):
     
     # Pricing and payment
     fare_per_passenger = Column(Float, nullable=False)
+    base_amount = Column(Float, nullable=False, default=0.0)
+    taxes = Column(Float, nullable=False, default=0.0)
     total_amount = Column(Float, nullable=False)
     currency = Column(String(3), default="INR")
     payment_method = Column(Enum(PaymentMethod), nullable=False)

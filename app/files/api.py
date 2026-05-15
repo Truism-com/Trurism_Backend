@@ -4,9 +4,11 @@ from fastapi import APIRouter, File, UploadFile, HTTPException, Depends, Query, 
 from fastapi.responses import FileResponse, JSONResponse
 from typing import Optional
 import os
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.api import get_current_user
 from app.auth.models import User
+from app.core.database import get_database_session
 from app.services import StorageService, PDFService
 from .schemas import (
     FileType,
@@ -211,24 +213,29 @@ async def download_file(
 async def generate_flight_ticket(
     booking_id: str = Path(..., description="Booking ID"),
     current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_database_session),
 ):
     """
     Generate PDF flight ticket for a booking.
     """
-    # TODO: Fetch actual booking data from database
-    # For now, use sample data
+    from app.booking.services import FlightBookingService
+    booking_service = FlightBookingService(db)
+    booking = await booking_service.get_flight_booking(int(booking_id), current_user.id)
+    if not booking:
+        raise HTTPException(status_code=404, detail="Booking not found")
+
     booking_data = {
-        "pnr": "ABC123",
-        "passenger_name": "John Doe",
-        "flight_number": "AI 101",
-        "departure_city": "Mumbai",
-        "arrival_city": "Delhi",
-        "departure_time": "10:00",
-        "arrival_time": "12:00",
-        "departure_date": "2024-01-15",
-        "seat_number": "12A",
-        "class": "Economy",
-        "airline": "Air India",
+        "pnr": booking.pnr or "",
+        "passenger_name": current_user.name,
+        "flight_number": booking.flight_number,
+        "departure_city": booking.origin,
+        "arrival_city": booking.destination,
+        "departure_time": booking.departure_time.strftime("%H:%M") if booking.departure_time else "",
+        "arrival_time": booking.arrival_time.strftime("%H:%M") if booking.arrival_time else "",
+        "departure_date": booking.departure_time.strftime("%Y-%m-%d") if booking.departure_time else "",
+        "seat_number": "",
+        "class": booking.travel_class or "Economy",
+        "airline": booking.airline,
     }
     
     try:
@@ -258,21 +265,27 @@ async def generate_flight_ticket(
 async def generate_hotel_voucher(
     booking_id: str = Path(..., description="Booking ID"),
     current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_database_session),
 ):
     """
     Generate PDF hotel voucher for a booking.
     """
-    # TODO: Fetch actual booking data
+    from app.booking.services import HotelBookingService
+    booking_service = HotelBookingService(db)
+    booking = await booking_service.get_hotel_booking(int(booking_id), current_user.id)
+    if not booking:
+        raise HTTPException(status_code=404, detail="Booking not found")
+
     booking_data = {
         "voucher_number": f"HV-{booking_id}",
-        "guest_name": "John Doe",
-        "hotel_name": "Grand Hotel",
-        "hotel_address": "123 Main St, Mumbai",
-        "check_in_date": "2024-01-15",
-        "check_out_date": "2024-01-17",
-        "room_type": "Deluxe",
-        "meal_plan": "Breakfast Included",
-        "guests": 2,
+        "guest_name": current_user.name,
+        "hotel_name": booking.hotel_name,
+        "hotel_address": booking.hotel_address or "",
+        "check_in_date": booking.checkin_date.strftime("%Y-%m-%d") if booking.checkin_date else "",
+        "check_out_date": booking.checkout_date.strftime("%Y-%m-%d") if booking.checkout_date else "",
+        "room_type": "Standard",
+        "meal_plan": "",
+        "guests": booking.adults + booking.children,
     }
     
     try:
@@ -301,28 +314,62 @@ async def generate_hotel_voucher(
 async def generate_invoice(
     booking_id: str = Path(..., description="Booking ID"),
     current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_database_session),
 ):
     """
     Generate PDF invoice for a booking.
     """
-    # TODO: Fetch actual invoice data
+    from app.booking.services import FlightBookingService, HotelBookingService, BusBookingService
+
+    booking = None
+    booking_type = "booking"
+
+    flight_svc = FlightBookingService(db)
+    booking = await flight_svc.get_flight_booking(int(booking_id), current_user.id)
+    if booking:
+        booking_type = "flight"
+        description = f"Flight Ticket - {booking.airline} {booking.flight_number}"
+        base_amount = booking.base_fare
+        tax_amount = booking.taxes
+        total = booking.total_amount
+    else:
+        hotel_svc = HotelBookingService(db)
+        booking = await hotel_svc.get_hotel_booking(int(booking_id), current_user.id)
+        if booking:
+            booking_type = "hotel"
+            description = f"Hotel Stay - {booking.hotel_name}"
+            base_amount = getattr(booking, 'base_amount', booking.room_rate * booking.nights * booking.rooms)
+            tax_amount = getattr(booking, 'taxes', 0.0)
+            total = booking.total_amount
+        else:
+            bus_svc = BusBookingService(db)
+            booking = await bus_svc.get_bus_booking(int(booking_id), current_user.id)
+            if booking:
+                booking_type = "bus"
+                description = f"Bus Ticket - {booking.operator}"
+                base_amount = getattr(booking, 'base_amount', booking.fare_per_passenger * booking.passengers)
+                tax_amount = getattr(booking, 'taxes', 0.0)
+                total = booking.total_amount
+
+    if not booking:
+        raise HTTPException(status_code=404, detail="Booking not found")
+
     invoice_data = {
         "invoice_number": f"INV-{booking_id}",
-        "invoice_date": "2024-01-10",
-        "due_date": "2024-01-20",
-        "customer_name": "John Doe",
-        "customer_email": "john@example.com",
-        "customer_address": "123 Main St, Mumbai",
+        "invoice_date": booking.created_at.strftime("%Y-%m-%d") if booking.created_at else "",
+        "due_date": "",
+        "customer_name": current_user.name,
+        "customer_email": current_user.email,
+        "customer_address": current_user.address or "",
         "items": [
-            {"description": "Flight Ticket - AI 101", "quantity": 1, "unit_price": 5000, "total": 5000},
-            {"description": "Service Fee", "quantity": 1, "unit_price": 200, "total": 200},
+            {"description": description, "quantity": 1, "unit_price": base_amount, "total": base_amount},
         ],
-        "subtotal": 5200,
-        "tax": 936,
-        "total": 6136,
-        "company_name": "Travel Agency",
-        "company_address": "456 Business St, Mumbai",
-        "company_email": "info@agency.com",
+        "subtotal": base_amount,
+        "tax": tax_amount,
+        "total": total,
+        "company_name": "Trurism",
+        "company_address": "",
+        "company_email": "",
     }
     
     try:

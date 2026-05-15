@@ -149,6 +149,12 @@ class Settings(BaseSettings):
     search_cache_ttl: int = 900  # 15 minutes
     session_cache_ttl: int = 3600  # 1 hour
     
+    # Tax Settings (defaults, overridable per-tenant via SystemSetting)
+    flight_gst_domestic: float = 0.05
+    flight_gst_international: float = 0.0
+    hotel_gst_default: float = 0.12
+    bus_gst: float = 0.05
+    
     # File Upload Settings
     max_file_size: int = 10 * 1024 * 1024  # 10MB
     allowed_file_types: list = [".jpg", ".jpeg", ".png", ".pdf"]
