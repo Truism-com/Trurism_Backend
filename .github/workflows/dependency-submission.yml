@@ -17,8 +17,5 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Dependency submission (Python)
-        uses: actions/component-detection-dependency-submission-action@v3
+        uses: advanced-security/component-detection-dependency-submission-action@v0.0.2
         continue-on-error: true
-        with:
-          # Our project is at the root, but pointing directly to the manifest helps the detection tool
-          manifest-path: requirements.txt
