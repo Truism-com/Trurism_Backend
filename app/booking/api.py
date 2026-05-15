@@ -180,8 +180,8 @@ async def create_hotel_booking(
 
         if not hotel_data:
             raise HTTPException(
-                status_code=status.HTTP_501_NOT_IMPLEMENTED,
-                detail="Hotel search integration is not yet available. Cannot verify hotel pricing."
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid or expired search_id, or the requested hotel was not found in the search results."
             )
 
         tenant_id = getattr(request.state, "tenant_id", None)
