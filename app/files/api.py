@@ -168,6 +168,11 @@ async def download_file(
     if not current_user.is_admin and str(current_user.id) != user_id:
         raise HTTPException(status_code=403, detail="Not authorized")
     
+    # Sanitize filename to prevent path traversal
+    if ".." in filename:
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    filename = os.path.basename(filename)
+    
     # Build file path based on type
     if file_type == FileType.KYC:
         file_path = f"kyc/{user_id}/{filename}"
@@ -413,6 +418,11 @@ async def delete_file(
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Admin access required")
     
+    # Sanitize filename to prevent path traversal
+    if ".." in filename:
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    filename = os.path.basename(filename)
+    
     # Build file path
     if file_type == FileType.KYC:
         file_path = f"kyc/{user_id}/{filename}"
@@ -443,6 +453,11 @@ async def get_file_info(
     """
     if not current_user.is_admin and str(current_user.id) != user_id:
         raise HTTPException(status_code=403, detail="Not authorized")
+    
+    # Sanitize filename to prevent path traversal
+    if ".." in filename:
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    filename = os.path.basename(filename)
     
     if file_type == FileType.KYC:
         file_path = f"kyc/{user_id}/{filename}"

@@ -9,7 +9,7 @@ This module defines the database models for booking operations:
 - Payment and transaction models
 """
 
-from sqlalchemy import Column, Integer, String, DateTime, Boolean, Text, Numeric, JSON, ForeignKey, Enum
+from sqlalchemy import Column, Integer, String, DateTime, Boolean, Text, Numeric, JSON, ForeignKey, Enum, UniqueConstraint
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 import enum
@@ -121,10 +121,13 @@ class FlightBooking(Base, TenantMixin):
     flight details, pricing, and booking status.
     """
     __tablename__ = "flight_bookings"
+    __table_args__ = (
+        UniqueConstraint('booking_reference', 'tenant_id', name='uq_flight_booking_ref_tenant'),
+    )
     
     # Primary identification
     id = Column(Integer, primary_key=True, index=True)
-    booking_reference = Column(String(20), unique=True, index=True, nullable=False)
+    booking_reference = Column(String(20), index=True, nullable=False)
     
     # User relationship
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
@@ -160,6 +163,7 @@ class FlightBooking(Base, TenantMixin):
     # Booking status
     status = Column(Enum(BookingStatus), default=BookingStatus.PENDING)
     confirmation_number = Column(String(50), nullable=True)  # From airline
+    pnr = Column(String(10), nullable=True)  # Passenger Name Record
     
     # Additional information
     special_requests = Column(Text, nullable=True)
@@ -183,10 +187,13 @@ class HotelBooking(Base, TenantMixin):
     room information, pricing, and booking status.
     """
     __tablename__ = "hotel_bookings"
+    __table_args__ = (
+        UniqueConstraint('booking_reference', 'tenant_id', name='uq_hotel_booking_ref_tenant'),
+    )
     
     # Primary identification
     id = Column(Integer, primary_key=True, index=True)
-    booking_reference = Column(String(20), unique=True, index=True, nullable=False)
+    booking_reference = Column(String(20), index=True, nullable=False)
     
     # User relationship
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
@@ -246,10 +253,13 @@ class BusBooking(Base, TenantMixin):
     journey information, pricing, and booking status.
     """
     __tablename__ = "bus_bookings"
+    __table_args__ = (
+        UniqueConstraint('booking_reference', 'tenant_id', name='uq_bus_booking_ref_tenant'),
+    )
     
     # Primary identification
     id = Column(Integer, primary_key=True, index=True)
-    booking_reference = Column(String(20), unique=True, index=True, nullable=False)
+    booking_reference = Column(String(20), index=True, nullable=False)
     
     # User relationship
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
@@ -288,6 +298,7 @@ class BusBooking(Base, TenantMixin):
     # Booking status
     status = Column(Enum(BookingStatus), default=BookingStatus.PENDING)
     confirmation_number = Column(String(50), nullable=True)  # From bus operator
+    ticket_number = Column(String(20), nullable=True)  # Unique ticket identifier
     
     # Additional information
     boarding_point = Column(String(255), nullable=True)

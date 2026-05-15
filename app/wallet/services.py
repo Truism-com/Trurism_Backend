@@ -190,7 +190,8 @@ class WalletService:
         booking_type: Optional[str] = None,
         payment_transaction_id: Optional[int] = None,
         processed_by_id: Optional[int] = None,
-        metadata: Optional[Dict] = None
+        metadata: Optional[Dict] = None,
+        auto_commit: bool = True
     ) -> WalletTransaction:
         """
         Credit amount to wallet.
@@ -205,6 +206,8 @@ class WalletService:
             payment_transaction_id: Related payment ID if any
             processed_by_id: Admin who processed this
             metadata: Additional metadata
+            auto_commit: If True, commit immediately. If False, caller
+                         controls the transaction boundary for atomicity.
             
         Returns:
             Created WalletTransaction
@@ -237,8 +240,11 @@ class WalletService:
         )
         
         self.db.add(transaction)
-        await self.db.commit()
-        await self.db.refresh(transaction)
+        if auto_commit:
+            await self.db.commit()
+            await self.db.refresh(transaction)
+        else:
+            await self.db.flush()
         
         logger.info(f"Credited {amount} to wallet {wallet.id}, ref: {transaction.transaction_ref}")
         return transaction
@@ -252,7 +258,8 @@ class WalletService:
         booking_type: Optional[str] = None,
         use_credit: bool = True,
         processed_by_id: Optional[int] = None,
-        metadata: Optional[Dict] = None
+        metadata: Optional[Dict] = None,
+        auto_commit: bool = True
     ) -> WalletTransaction:
         """
         Debit amount from wallet.
@@ -266,6 +273,8 @@ class WalletService:
             use_credit: Whether to use credit if balance insufficient
             processed_by_id: Admin who processed this
             metadata: Additional metadata
+            auto_commit: If True, commit immediately. If False, caller
+                         controls the transaction boundary for atomicity.
             
         Returns:
             Created WalletTransaction
@@ -343,8 +352,11 @@ class WalletService:
         )
         
         self.db.add(transaction)
-        await self.db.commit()
-        await self.db.refresh(transaction)
+        if auto_commit:
+            await self.db.commit()
+            await self.db.refresh(transaction)
+        else:
+            await self.db.flush()
         
         logger.info(f"Debited {amount} from wallet {wallet.id}, ref: {transaction.transaction_ref}")
         return transaction

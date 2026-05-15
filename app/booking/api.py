@@ -153,16 +153,37 @@ async def create_hotel_booking(
         HTTPException: If booking creation fails or payment fails
     """
     try:
-        # TODO: Get actual hotel data from search results using hotel_id
-        # For now, using mock hotel data
-        hotel_data = {
-            "price_per_night": 3500.0,
-            "name": "Grand Plaza Hotel",
-            "address": "123 Main Street, Mumbai",
-            "city": "Mumbai",
-            "cancellation_policy": "Free cancellation until 24 hours before check-in"
-        }
-        
+        # Look up hotel data from cached search results
+        redis_client = get_redis_client()
+        if redis_client is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Search cache is unavailable. Please try again later."
+            )
+
+        hotel_data = None
+        cache_key = f"search:hotel:{booking_request.search_id}"
+        try:
+            cached_data_str = await redis_client.get(cache_key)
+            if cached_data_str:
+                cached_data = json.loads(cached_data_str)
+                for result in cached_data.get("results", []):
+                    if result.get("hotel_id") == booking_request.hotel_id:
+                        hotel_data = result
+                        break
+        except Exception as redis_err:
+            logging.getLogger(__name__).error(f"Redis read error during hotel booking: {redis_err}", exc_info=True)
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Search cache is unavailable. Please try again later."
+            )
+
+        if not hotel_data:
+            raise HTTPException(
+                status_code=status.HTTP_501_NOT_IMPLEMENTED,
+                detail="Hotel search integration is not yet available. Cannot verify hotel pricing."
+            )
+
         tenant_id = getattr(request.state, "tenant_id", None)
         booking_service = HotelBookingService(db, tenant_id=tenant_id)
         # Track who created this booking (for B2B agent tracking)
@@ -171,7 +192,9 @@ async def create_hotel_booking(
         )
         
         return HotelBookingResponse.model_validate(booking)
-        
+
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -205,18 +228,37 @@ async def create_bus_booking(
         HTTPException: If booking creation fails or payment fails
     """
     try:
-        # TODO: Get actual bus data from search results using bus_id
-        # For now, using mock bus data
-        bus_data = {
-            "price": 1200.0,
-            "operator": "GoBus",
-            "bus_type": "AC Sleeper",
-            "origin": "Delhi",
-            "destination": "Mumbai",
-            "departure_time": "2025-01-15T20:00:00",
-            "arrival_time": "2025-01-16T04:00:00"
-        }
-        
+        # Look up bus data from cached search results
+        redis_client = get_redis_client()
+        if redis_client is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Search cache is unavailable. Please try again later."
+            )
+
+        bus_data = None
+        cache_key = f"search:bus:{booking_request.search_id}"
+        try:
+            cached_data_str = await redis_client.get(cache_key)
+            if cached_data_str:
+                cached_data = json.loads(cached_data_str)
+                for result in cached_data.get("results", []):
+                    if result.get("bus_id") == booking_request.bus_id:
+                        bus_data = result
+                        break
+        except Exception as redis_err:
+            logging.getLogger(__name__).error(f"Redis read error during bus booking: {redis_err}", exc_info=True)
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Search cache is unavailable. Please try again later."
+            )
+
+        if not bus_data:
+            raise HTTPException(
+                status_code=status.HTTP_501_NOT_IMPLEMENTED,
+                detail="Bus search integration is not yet available. Cannot verify bus pricing."
+            )
+
         tenant_id = getattr(request.state, "tenant_id", None)
         booking_service = BusBookingService(db, tenant_id=tenant_id)
         # Track who created this booking (for B2B agent tracking)
@@ -225,7 +267,9 @@ async def create_bus_booking(
         )
         
         return BusBookingResponse.model_validate(booking)
-        
+
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

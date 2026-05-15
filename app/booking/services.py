@@ -165,6 +165,7 @@ class FlightBookingService(BaseBookingService):
                 flight_booking.payment_status = PaymentStatus.SUCCESS
                 flight_booking.status = BookingStatus.CONFIRMED
                 flight_booking.confirmation_number = f"FL{flight_booking.id:06d}"
+                flight_booking.pnr = f"PNR{flight_booking.id:06d}"
             else:
                 flight_booking.payment_status = PaymentStatus.FAILED
                 flight_booking.status = BookingStatus.PENDING

@@ -144,7 +144,11 @@ class BookingPaymentProcessor:
         booking_type: str,
         description: Optional[str] = None
     ) -> Dict[str, Any]:
-        """Process payment from wallet balance."""
+        """Process payment from wallet balance.
+        
+        Uses auto_commit=False so the caller (booking service) can commit
+        both the wallet debit and the booking record atomically.
+        """
         try:
             transaction = await self.wallet_service.debit(
                 user_id=user_id,
@@ -152,7 +156,8 @@ class BookingPaymentProcessor:
                 description=description or f"Payment for {booking_type} booking #{booking_id}",
                 booking_id=booking_id,
                 booking_type=booking_type,
-                use_credit=False  # Only use balance, not credit
+                use_credit=False,  # Only use balance, not credit
+                auto_commit=False  # Caller controls commit for atomicity
             )
             
             return {
@@ -396,7 +401,11 @@ class BookingPaymentProcessor:
         booking_type: str,
         description: Optional[str] = None
     ) -> Dict[str, Any]:
-        """Process payment using agent credit limit."""
+        """Process payment using agent credit limit.
+        
+        Uses auto_commit=False so the caller (booking service) can commit
+        both the wallet debit and the booking record atomically.
+        """
         try:
             # Debit from wallet using credit
             transaction = await self.wallet_service.debit(
@@ -405,7 +414,8 @@ class BookingPaymentProcessor:
                 description=description or f"Credit payment for {booking_type} booking #{booking_id}",
                 booking_id=booking_id,
                 booking_type=booking_type,
-                use_credit=True  # Allow using credit limit
+                use_credit=True,  # Allow using credit limit
+                auto_commit=False  # Caller controls commit for atomicity
             )
             
             return {
