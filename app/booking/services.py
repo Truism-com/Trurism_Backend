@@ -517,7 +517,9 @@ class BusBookingService(BaseBookingService):
             if payment_result['status'] == PaymentStatus.SUCCESS:
                 bus_booking.payment_status = PaymentStatus.SUCCESS
                 bus_booking.status = BookingStatus.CONFIRMED
-                bus_booking.confirmation_number = f"BUS{bus_booking.id:06d}"
+                confirmation_number = f"BUS{bus_booking.id:06d}"
+                bus_booking.confirmation_number = confirmation_number
+                bus_booking.ticket_number = confirmation_number
             
             await self.db.commit()
             await self.db.refresh(bus_booking)
