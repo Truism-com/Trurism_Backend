@@ -131,7 +131,7 @@ class WalletService:
     async def get_wallet_by_user_id(self, user_id: int) -> Optional[Wallet]:
         """Get wallet by user ID with optional tenant isolation."""
         query = select(Wallet).where(Wallet.user_id == user_id)
-        if self.tenant_id is not None and hasattr(Wallet, 'tenant_id'):
+        if self.tenant_id is not None:
             query = query.where(Wallet.tenant_id == self.tenant_id)
         result = await self.db.execute(query)
         return result.scalar_one_or_none()
