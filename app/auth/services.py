@@ -302,12 +302,6 @@ class AuthService:
                 detail="Too many OTP attempts. Please request a new OTP."
             )
 
-        # Increment attempt counter before checking OTP (prevents timing attacks)
-        await redis.incr(attempts_key)
-        if attempts == 0:
-            # Set TTL on first attempt (15 minutes, same as OTP)
-            await redis.expire(attempts_key, 900)
-
         key = f"pwd_reset_otp:{email}"
         stored_otp = await redis.get(key)
         
@@ -317,8 +311,12 @@ class AuthService:
             )
         
         if stored_otp != otp:
+            current_attempts = await redis.incr(attempts_key)
+            if current_attempts == 1:
+                # Set TTL on first failed attempt (15 minutes, same as OTP)
+                await redis.expire(attempts_key, 900)
             # On 5th failed attempt, delete OTP to force re-request
-            if attempts + 1 >= 5:
+            if current_attempts >= 5:
                 await redis.delete(key)
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,detail="Invalid OTP"
