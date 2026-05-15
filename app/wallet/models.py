@@ -71,24 +71,24 @@ class Wallet(Base, TenantMixin):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), unique=True)
     
     # Balance fields
-    balance: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0.0)
-    hold_amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0.0)  # Amount on hold for pending transactions
+    balance: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=Decimal("0.00"))
+    hold_amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=Decimal("0.00"))  # Amount on hold for pending transactions
     currency: Mapped[str] = mapped_column(String(3), default="INR")
     
     # Credit limit (for agents)
-    credit_limit: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0.0)
-    credit_used: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0.0)
+    credit_limit: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=Decimal("0.00"))
+    credit_used: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=Decimal("0.00"))
     
     # Status
     status: Mapped[WalletStatus] = mapped_column(default=WalletStatus.ACTIVE)
     
     # Limits
-    daily_transaction_limit: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=100000.0)  # Max daily transactions
-    min_balance: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0.0)  # Minimum balance to maintain
+    daily_transaction_limit: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=Decimal("100000.00"))  # Max daily transactions
+    min_balance: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=Decimal("0.00"))  # Minimum balance to maintain
     
     # Statistics
-    total_credited: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0.0)
-    total_debited: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0.0)
+    total_credited: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=Decimal("0.00"))
+    total_debited: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=Decimal("0.00"))
     last_transaction_at: Mapped[Optional[datetime]] = mapped_column(nullable=True)
     
     # Audit fields

@@ -13,6 +13,7 @@ from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 import enum
 from datetime import datetime
+from decimal import Decimal
 
 from app.core.database import Base
 from app.core.mixins import TenantMixin
@@ -80,8 +81,8 @@ class PaymentTransaction(Base, TenantMixin):
     
     # Pricing breakdown
     base_amount = Column(Numeric(14, 2), nullable=False)
-    convenience_fee = Column(Numeric(14, 2), default=0.0, nullable=False)
-    taxes = Column(Numeric(14, 2), default=0.0, nullable=False)
+    convenience_fee = Column(Numeric(14, 2), default=Decimal("0.00"), nullable=False)
+    taxes = Column(Numeric(14, 2), default=Decimal("0.00"), nullable=False)
     
     # Gateway response
     gateway_response = Column(JSON, nullable=True)

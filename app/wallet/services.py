@@ -626,14 +626,15 @@ class WalletService:
         
         transaction = None
         if convert_to_debit:
-            # Convert to actual debit
+            # Convert to actual debit with auto_commit=False to keep atomic
             transaction = await self.debit(
                 user_id=hold["user_id"],
                 amount=hold["amount"],
                 description=description or f"Payment for {hold['booking_type']} booking",
                 booking_id=hold["booking_id"],
                 booking_type=hold["booking_type"],
-                use_credit=False  # Already validated during hold
+                use_credit=False,  # Already validated during hold
+                auto_commit=False  # Keep atomic with hold release
             )
         
         if self.redis:

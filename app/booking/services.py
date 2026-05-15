@@ -12,8 +12,9 @@ This module contains business logic for booking operations:
 import uuid
 import asyncio
 import random
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional, Dict, Any
+from decimal import Decimal
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, and_
 from fastapi import HTTPException, status
@@ -250,7 +251,7 @@ class FlightBookingService(BaseBookingService):
             raise HTTPException(status_code=400, detail="Already cancelled")
         
         # Calculate refund (simplified)
-        refund_amount = booking.total_amount * 0.8 if (booking.departure_time - datetime.utcnow()).total_seconds() > 86400 else 0
+        refund_amount = booking.total_amount * Decimal("0.8") if (booking.departure_time - datetime.now(timezone.utc)).total_seconds() > 86400 else Decimal("0")
         
         # Process refund via processor
         if refund_amount > 0:
@@ -265,7 +266,7 @@ class FlightBookingService(BaseBookingService):
         
         booking.status = BookingStatus.CANCELLED
         booking.refund_amount = refund_amount
-        booking.payment_status = PaymentStatus.REFUNDED if refund_amount > 0 else PaymentStatus.FAILED
+        booking.payment_status = PaymentStatus.REFUNDED if refund_amount > 0 else booking.payment_status
         
         await self.db.commit()
         await self.db.refresh(booking)
@@ -411,8 +412,8 @@ class HotelBookingService(BaseBookingService):
             raise HTTPException(status_code=400, detail="Already cancelled")
         
         # Calculate refund (80% if more than 24h before checkin)
-        time_until_checkin = (booking.checkin_date - datetime.utcnow()).total_seconds()
-        refund_amount = booking.total_amount * 0.8 if time_until_checkin > 86400 else 0
+        time_until_checkin = (booking.checkin_date - datetime.now(timezone.utc)).total_seconds()
+        refund_amount = booking.total_amount * Decimal("0.8") if time_until_checkin > 86400 else Decimal("0")
         
         if refund_amount > 0:
             await self.payment_processor.process_refund(
@@ -426,7 +427,7 @@ class HotelBookingService(BaseBookingService):
         
         booking.status = BookingStatus.CANCELLED
         booking.refund_amount = refund_amount
-        booking.payment_status = PaymentStatus.REFUNDED if refund_amount > 0 else PaymentStatus.FAILED
+        booking.payment_status = PaymentStatus.REFUNDED if refund_amount > 0 else booking.payment_status
         
         await self.db.commit()
         await self.db.refresh(booking)
@@ -586,8 +587,8 @@ class BusBookingService(BaseBookingService):
             raise HTTPException(status_code=400, detail="Already cancelled")
         
         # Calculate refund (80% if more than 24h before departure)
-        time_until_departure = (booking.departure_time - datetime.utcnow()).total_seconds()
-        refund_amount = booking.total_amount * 0.8 if time_until_departure > 86400 else 0
+        time_until_departure = (booking.departure_time - datetime.now(timezone.utc)).total_seconds()
+        refund_amount = booking.total_amount * Decimal("0.8") if time_until_departure > 86400 else Decimal("0")
         
         if refund_amount > 0:
             await self.payment_processor.process_refund(
@@ -601,7 +602,7 @@ class BusBookingService(BaseBookingService):
         
         booking.status = BookingStatus.CANCELLED
         booking.refund_amount = refund_amount
-        booking.payment_status = PaymentStatus.REFUNDED if refund_amount > 0 else PaymentStatus.FAILED
+        booking.payment_status = PaymentStatus.REFUNDED if refund_amount > 0 else booking.payment_status
         
         await self.db.commit()
         await self.db.refresh(booking)
