@@ -79,8 +79,9 @@ def generate_hold_id() -> str:
 class WalletService:
     """Service class for wallet operations."""
     
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: AsyncSession, tenant_id: Optional[int] = None):
         self.db = db
+        self.tenant_id = tenant_id
         self.redis = get_redis_client()
     
     # =========================================================================
@@ -128,10 +129,11 @@ class WalletService:
         return result.scalar_one_or_none()
     
     async def get_wallet_by_user_id(self, user_id: int) -> Optional[Wallet]:
-        """Get wallet by user ID."""
-        result = await self.db.execute(
-            select(Wallet).where(Wallet.user_id == user_id)
-        )
+        """Get wallet by user ID with optional tenant isolation."""
+        query = select(Wallet).where(Wallet.user_id == user_id)
+        if self.tenant_id is not None and hasattr(Wallet, 'tenant_id'):
+            query = query.where(Wallet.tenant_id == self.tenant_id)
+        result = await self.db.execute(query)
         return result.scalar_one_or_none()
     
     async def get_or_create_wallet(self, user_id: int) -> Wallet:
@@ -231,7 +233,7 @@ class WalletService:
             payment_transaction_id=payment_transaction_id,
             description=description,
             processed_by_id=processed_by_id,
-            metadata=json.dumps(metadata) if metadata else None
+            extra_data=json.dumps(metadata) if metadata else None
         )
         
         self.db.add(transaction)
@@ -337,7 +339,7 @@ class WalletService:
             booking_type=booking_type,
             description=description,
             processed_by_id=processed_by_id,
-            metadata=json.dumps(metadata) if metadata else None
+            extra_data=json.dumps(metadata) if metadata else None
         )
         
         self.db.add(transaction)
@@ -624,10 +626,10 @@ class WalletService:
         
         if self.redis:
             if not convert_to_debit:
-                await self.redis.delete(f"wallet:hold:{hold_id}")
+                await self.redis.delete(f"hold:{hold_id}")
             else:
                 hold["status"] = "converted"
-                await self.redis.set(f"wallet:hold:{hold_id}", json.dumps(hold))
+                await self.redis.set(f"hold:{hold_id}", json.dumps(hold))
         
         await self.db.commit()
         

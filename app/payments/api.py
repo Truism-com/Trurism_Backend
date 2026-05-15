@@ -191,7 +191,7 @@ async def razorpay_webhook(
         # CRITICAL SECURITY: Reject if signature header is missing
         if not x_razorpay_signature:
             logger.warning(f"Webhook rejected: Missing X-Razorpay-Signature header from {request.client.host if request.client else 'unknown'}")
-            return HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing signature header")
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing signature header")
 
         # Get raw body for signature verification
         body = await request.body()
@@ -207,7 +207,7 @@ async def razorpay_webhook(
         # CRITICAL SECURITY: Reject if signature verification fails
         if not is_verified:
             logger.warning(f"Webhook rejected: Signature verification failed from {request.client.host if request.client else 'unknown'} for event {payload.get('event', 'unknown')}")
-            return HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Signature verification failed")
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Signature verification failed")
 
         # Get event type
         event_type = payload.get('event', '')

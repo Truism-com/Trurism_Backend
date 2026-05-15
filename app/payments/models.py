@@ -8,7 +8,7 @@ This module defines database models for payment operations:
 - Webhook event logging
 """
 
-from sqlalchemy import Column, Integer, String, DateTime, Boolean, Float, JSON, Text, ForeignKey, Enum
+from sqlalchemy import Column, Integer, String, DateTime, Boolean, Numeric, JSON, Text, ForeignKey, Enum
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 import enum
@@ -73,15 +73,15 @@ class PaymentTransaction(Base, TenantMixin):
     razorpay_signature = Column(String(255), nullable=True)
     
     # Payment details
-    amount = Column(Float, nullable=False)  # In INR
+    amount = Column(Numeric(14, 2), nullable=False)  # In INR
     currency = Column(String(3), default="INR", nullable=False)
     status = Column(Enum(PaymentTransactionStatus), default=PaymentTransactionStatus.CREATED, nullable=False)
     payment_method = Column(String(50), nullable=True)  # Populated after payment
     
     # Pricing breakdown
-    base_amount = Column(Float, nullable=False)
-    convenience_fee = Column(Float, default=0.0, nullable=False)
-    taxes = Column(Float, default=0.0, nullable=False)
+    base_amount = Column(Numeric(14, 2), nullable=False)
+    convenience_fee = Column(Numeric(14, 2), default=0.0, nullable=False)
+    taxes = Column(Numeric(14, 2), default=0.0, nullable=False)
     
     # Gateway response
     gateway_response = Column(JSON, nullable=True)
@@ -120,7 +120,7 @@ class Refund(Base, TenantMixin):
     razorpay_refund_id = Column(String(100), unique=True, index=True, nullable=True)
     
     # Refund details
-    amount = Column(Float, nullable=False)
+    amount = Column(Numeric(14, 2), nullable=False)
     reason = Column(Text, nullable=True)
     status = Column(Enum(RefundStatus), default=RefundStatus.PENDING, nullable=False)
     
