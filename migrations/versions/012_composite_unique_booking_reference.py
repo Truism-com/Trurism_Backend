@@ -25,10 +25,10 @@ def upgrade() -> None:
     # FlightBooking: drop old unique, add composite
     # Use batch mode for safety with existing data
     # Use raw SQL with IF EXISTS for robustness across environments
-    op.execute("""
-        ALTER TABLE flight_bookings 
-        DROP CONSTRAINT IF EXISTS flight_bookings_booking_reference_key
-    """)
+    op.execute(
+        "ALTER TABLE flight_bookings "
+        "DROP CONSTRAINT IF EXISTS flight_bookings_booking_reference_key"
+    )
     with op.batch_alter_table('flight_bookings') as batch_op:
         batch_op.create_unique_constraint(
             'uq_flight_booking_ref_tenant',
@@ -36,10 +36,10 @@ def upgrade() -> None:
         )
 
     # HotelBooking: drop old unique, add composite
-    op.execute("""
-        ALTER TABLE hotel_bookings 
-        DROP CONSTRAINT IF EXISTS hotel_bookings_booking_reference_key
-    """)
+    op.execute(
+        "ALTER TABLE hotel_bookings "
+        "DROP CONSTRAINT IF EXISTS hotel_bookings_booking_reference_key"
+    )
     with op.batch_alter_table('hotel_bookings') as batch_op:
         batch_op.create_unique_constraint(
             'uq_hotel_booking_ref_tenant',
@@ -47,10 +47,10 @@ def upgrade() -> None:
         )
 
     # BusBooking: drop old unique, add composite
-    op.execute("""
-        ALTER TABLE bus_bookings 
-        DROP CONSTRAINT IF EXISTS bus_bookings_booking_reference_key
-    """)
+    op.execute(
+        "ALTER TABLE bus_bookings "
+        "DROP CONSTRAINT IF EXISTS bus_bookings_booking_reference_key"
+    )
     with op.batch_alter_table('bus_bookings') as batch_op:
         batch_op.create_unique_constraint(
             'uq_bus_booking_ref_tenant',
