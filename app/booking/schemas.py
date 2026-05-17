@@ -150,6 +150,7 @@ class HotelBookingRequest(BaseModel):
     Validates hotel booking data including guest information,
     room details, and payment information.
     """
+    search_id: str = Field(..., description="Search ID from the original hotel search")
     hotel_id: str = Field(..., description="Hotel ID from search results")
     checkin_date: date = Field(..., description="Check-in date")
     checkout_date: date = Field(..., description="Check-out date")
@@ -188,6 +189,7 @@ class BusBookingRequest(BaseModel):
     Validates bus booking data including passenger information,
     journey details, and payment information.
     """
+    search_id: str = Field(..., description="Search ID from the original bus search")
     bus_id: str = Field(..., description="Bus ID from search results")
     travel_date: date = Field(..., description="Travel date")
     passengers: int = Field(..., ge=1, le=9, description="Number of passengers")

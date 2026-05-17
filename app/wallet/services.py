@@ -79,8 +79,9 @@ def generate_hold_id() -> str:
 class WalletService:
     """Service class for wallet operations."""
     
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: AsyncSession, tenant_id: Optional[int] = None):
         self.db = db
+        self.tenant_id = tenant_id
         self.redis = get_redis_client()
     
     # =========================================================================
@@ -121,17 +122,19 @@ class WalletService:
         return wallet
     
     async def get_wallet(self, wallet_id: int) -> Optional[Wallet]:
-        """Get wallet by ID."""
-        result = await self.db.execute(
-            select(Wallet).where(Wallet.id == wallet_id)
-        )
+        """Get wallet by ID with optional tenant isolation."""
+        query = select(Wallet).where(Wallet.id == wallet_id)
+        if self.tenant_id is not None:
+            query = query.where(Wallet.tenant_id == self.tenant_id)
+        result = await self.db.execute(query)
         return result.scalar_one_or_none()
     
     async def get_wallet_by_user_id(self, user_id: int) -> Optional[Wallet]:
-        """Get wallet by user ID."""
-        result = await self.db.execute(
-            select(Wallet).where(Wallet.user_id == user_id)
-        )
+        """Get wallet by user ID with optional tenant isolation."""
+        query = select(Wallet).where(Wallet.user_id == user_id)
+        if self.tenant_id is not None:
+            query = query.where(Wallet.tenant_id == self.tenant_id)
+        result = await self.db.execute(query)
         return result.scalar_one_or_none()
     
     async def get_or_create_wallet(self, user_id: int) -> Wallet:
@@ -188,7 +191,8 @@ class WalletService:
         booking_type: Optional[str] = None,
         payment_transaction_id: Optional[int] = None,
         processed_by_id: Optional[int] = None,
-        metadata: Optional[Dict] = None
+        metadata: Optional[Dict] = None,
+        auto_commit: bool = True
     ) -> WalletTransaction:
         """
         Credit amount to wallet.
@@ -203,6 +207,8 @@ class WalletService:
             payment_transaction_id: Related payment ID if any
             processed_by_id: Admin who processed this
             metadata: Additional metadata
+            auto_commit: If True, commit immediately. If False, caller
+                         controls the transaction boundary for atomicity.
             
         Returns:
             Created WalletTransaction
@@ -231,12 +237,15 @@ class WalletService:
             payment_transaction_id=payment_transaction_id,
             description=description,
             processed_by_id=processed_by_id,
-            metadata=json.dumps(metadata) if metadata else None
+            extra_data=json.dumps(metadata) if metadata else None
         )
         
         self.db.add(transaction)
-        await self.db.commit()
-        await self.db.refresh(transaction)
+        if auto_commit:
+            await self.db.commit()
+            await self.db.refresh(transaction)
+        else:
+            await self.db.flush()
         
         logger.info(f"Credited {amount} to wallet {wallet.id}, ref: {transaction.transaction_ref}")
         return transaction
@@ -250,7 +259,8 @@ class WalletService:
         booking_type: Optional[str] = None,
         use_credit: bool = True,
         processed_by_id: Optional[int] = None,
-        metadata: Optional[Dict] = None
+        metadata: Optional[Dict] = None,
+        auto_commit: bool = True
     ) -> WalletTransaction:
         """
         Debit amount from wallet.
@@ -264,6 +274,8 @@ class WalletService:
             use_credit: Whether to use credit if balance insufficient
             processed_by_id: Admin who processed this
             metadata: Additional metadata
+            auto_commit: If True, commit immediately. If False, caller
+                         controls the transaction boundary for atomicity.
             
         Returns:
             Created WalletTransaction
@@ -275,11 +287,10 @@ class WalletService:
             raise ValueError("Amount must be positive")
         
         # Acquire row-level lock to prevent race conditions on concurrent debits
-        result = await self.db.execute(
-            select(Wallet)
-            .where(Wallet.user_id == user_id)
-            .with_for_update()
-        )
+        query = select(Wallet).where(Wallet.user_id == user_id).with_for_update()
+        if self.tenant_id is not None:
+            query = query.where(Wallet.tenant_id == self.tenant_id)
+        result = await self.db.execute(query)
         wallet = result.scalar_one_or_none()
         if not wallet:
             raise WalletNotFoundError(f"Wallet not found for user {user_id}")
@@ -337,12 +348,15 @@ class WalletService:
             booking_type=booking_type,
             description=description,
             processed_by_id=processed_by_id,
-            metadata=json.dumps(metadata) if metadata else None
+            extra_data=json.dumps(metadata) if metadata else None
         )
         
         self.db.add(transaction)
-        await self.db.commit()
-        await self.db.refresh(transaction)
+        if auto_commit:
+            await self.db.commit()
+            await self.db.refresh(transaction)
+        else:
+            await self.db.flush()
         
         logger.info(f"Debited {amount} from wallet {wallet.id}, ref: {transaction.transaction_ref}")
         return transaction
@@ -396,22 +410,20 @@ class WalletService:
             raise ValueError("Amount must be positive")
         
         # Acquire row-level locks on both wallets to prevent race conditions
-        result = await self.db.execute(
-            select(Wallet)
-            .where(Wallet.user_id == from_user_id)
-            .with_for_update()
-        )
+        query = select(Wallet).where(Wallet.user_id == from_user_id).with_for_update()
+        if self.tenant_id is not None:
+            query = query.where(Wallet.tenant_id == self.tenant_id)
+        result = await self.db.execute(query)
         from_wallet = result.scalar_one_or_none()
         if not from_wallet:
             raise WalletNotFoundError(f"Source wallet not found for user {from_user_id}")
         
         # Lock destination wallet too (create first if needed)
         to_wallet = await self.get_or_create_wallet(to_user_id)
-        result = await self.db.execute(
-            select(Wallet)
-            .where(Wallet.id == to_wallet.id)
-            .with_for_update()
-        )
+        query = select(Wallet).where(Wallet.id == to_wallet.id).with_for_update()
+        if self.tenant_id is not None:
+            query = query.where(Wallet.tenant_id == self.tenant_id)
+        result = await self.db.execute(query)
         to_wallet = result.scalar_one_or_none()
         
         await self._validate_wallet(from_wallet)
@@ -533,9 +545,10 @@ class WalletService:
         Returns:
             Hold details
         """
-        result = await self.db.execute(
-            select(Wallet).where(Wallet.user_id == user_id).with_for_update()
-        )
+        query = select(Wallet).where(Wallet.user_id == user_id).with_for_update()
+        if self.tenant_id is not None:
+            query = query.where(Wallet.tenant_id == self.tenant_id)
+        result = await self.db.execute(query)
         wallet = result.scalar_one_or_none()
         if not wallet:
             raise WalletNotFoundError(f"Wallet not found for user {user_id}")
@@ -612,22 +625,23 @@ class WalletService:
         
         transaction = None
         if convert_to_debit:
-            # Convert to actual debit
+            # Convert to actual debit with auto_commit=False to keep atomic
             transaction = await self.debit(
                 user_id=hold["user_id"],
                 amount=hold["amount"],
                 description=description or f"Payment for {hold['booking_type']} booking",
                 booking_id=hold["booking_id"],
                 booking_type=hold["booking_type"],
-                use_credit=False  # Already validated during hold
+                use_credit=False,  # Already validated during hold
+                auto_commit=False  # Keep atomic with hold release
             )
         
         if self.redis:
             if not convert_to_debit:
-                await self.redis.delete(f"wallet:hold:{hold_id}")
+                await self.redis.delete(f"hold:{hold_id}")
             else:
                 hold["status"] = "converted"
-                await self.redis.set(f"wallet:hold:{hold_id}", json.dumps(hold))
+                await self.redis.set(f"hold:{hold_id}", json.dumps(hold))
         
         await self.db.commit()
         

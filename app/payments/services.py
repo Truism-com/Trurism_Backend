@@ -16,6 +16,7 @@ from typing import Optional, Dict, Any, Tuple
 from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
+from sqlalchemy.exc import IntegrityError
 from fastapi import HTTPException, status
 
 from app.payments.models import (
@@ -652,10 +653,14 @@ class WebhookService:
     ) -> WebhookLog:
         """
         Process webhook event and log it.
+        
+        Uses INSERT ... ON CONFLICT DO NOTHING on razorpay_event_id
+        for race-condition-safe idempotency.
         """
-        # Idempotency check: prefer the caller-supplied event ID; fall back to the
-        # top-level "id" field that Razorpay always includes in the webhook body.
+        # Resolve event ID: prefer caller-supplied, fall back to payload "id"
         resolved_event_id = razorpay_event_id or payload.get("id")
+
+        # Idempotency: if event ID exists, try DB-level duplicate check first
         if resolved_event_id:
             existing = await self.db.execute(
                 select(WebhookLog).where(WebhookLog.razorpay_event_id == resolved_event_id)
@@ -676,6 +681,22 @@ class WebhookService:
         
         self.db.add(webhook_log)
         
+        # Flush to trigger unique constraint check before processing
+        try:
+            await self.db.flush()
+        except IntegrityError as conflict_err:
+            # Unique constraint violation = duplicate event (race condition)
+            await self.db.rollback()
+            logger.info(f"Webhook duplicate detected via constraint: {resolved_event_id}")
+            existing = await self.db.execute(
+                select(WebhookLog).where(WebhookLog.razorpay_event_id == resolved_event_id)
+            )
+            existing_log = existing.scalar_one_or_none()
+            if existing_log:
+                return existing_log
+            # If somehow not found, re-raise
+            raise conflict_err
+
         if not is_verified:
             webhook_log.error_message = "Signature verification failed"
             await self.db.commit()

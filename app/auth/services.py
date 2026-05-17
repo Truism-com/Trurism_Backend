@@ -281,12 +281,27 @@ class AuthService:
         """
         Verify the OTP for the given email, reset the password if valid,
         and delete the OTP key. Raises HTTP 400 on invalid/expired OTP.
+        
+        Rate limited: max 5 attempts per 15-minute window per email.
+        After 5 failed attempts, OTP is deleted and user must request a new one.
         """
         redis = get_redis_client()
         if not redis:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,detail="OTP service temporarily unavailable"
             )
+
+        # Brute-force protection: track attempts per email
+        attempts_key = f"otp_attempts:{email}"
+        attempts = await redis.get(attempts_key)
+        attempts = int(attempts) if attempts else 0
+
+        if attempts >= 5:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Too many OTP attempts. Please request a new OTP."
+            )
+
         key = f"pwd_reset_otp:{email}"
         stored_otp = await redis.get(key)
         
@@ -296,6 +311,13 @@ class AuthService:
             )
         
         if stored_otp != otp:
+            current_attempts = await redis.incr(attempts_key)
+            if current_attempts == 1:
+                # Set TTL on first failed attempt (15 minutes, same as OTP)
+                await redis.expire(attempts_key, 900)
+            # On 5th failed attempt, delete OTP to force re-request
+            if current_attempts >= 5:
+                await redis.delete(key)
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,detail="Invalid OTP"
             )
@@ -308,26 +330,28 @@ class AuthService:
         
         user.password_hash=SecurityManager.hash_password(new_password)
         await self.db.commit()
+        # Clean up both OTP and attempts counter on success
         await redis.delete(key)
+        await redis.delete(attempts_key)
         return True
     
-    async def get_all_users(self, skip: int = 0, limit: int = 100) -> list[User]:
+    async def get_all_users(self, skip: int = 0, limit: int = 100, tenant_id: Optional[int] = None) -> list[User]:
         """
         Get all users with pagination (admin only).
         
         Args:
             skip (int): Number of records to skip
             limit (int): Maximum number of records to return
+            tenant_id (Optional[int]): Tenant ID for multi-tenant isolation
             
         Returns:
             list[User]: List of users
         """
-        result = await self.db.execute(
-            select(User)
-            .offset(skip)
-            .limit(limit)
-            .order_by(User.created_at.desc())
-        )
+        query = select(User)
+        if tenant_id is not None:
+            query = query.where(User.tenant_id == tenant_id)
+        query = query.offset(skip).limit(limit).order_by(User.created_at.desc())
+        result = await self.db.execute(query)
         return result.scalars().all()
     
     async def approve_agent(self, agent_id: int, approval_data: AgentApprovalRequest) -> User:

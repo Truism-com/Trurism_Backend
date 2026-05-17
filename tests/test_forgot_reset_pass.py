@@ -5,11 +5,13 @@ Mocks aiosmtplib and Redis so no real services are needed.
 import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
 from httpx import AsyncClient, ASGITransport
+from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.main import app
 from app.core.database import get_database_session
 from app.auth.models import User
+from app.auth.services import AuthService
 from app.core.security import SecurityManager
 
 
@@ -45,6 +47,8 @@ def mock_redis():
     redis = MagicMock()
     redis.setex = AsyncMock(side_effect=lambda k, ttl, v: store.update({k: v}))
     redis.get = AsyncMock(side_effect=lambda k: store.get(k))
+    redis.incr = AsyncMock(side_effect=lambda k: store.update({k: int(store.get(k, 0)) + 1}) or store[k])
+    redis.expire = AsyncMock(return_value=True)
     redis.delete = AsyncMock(side_effect=lambda k: store.pop(k, None))
     return redis, store
 
@@ -154,3 +158,40 @@ async def test_reset_password_wrong_otp(mock_db, mock_redis):
     app.dependency_overrides.clear()
     assert resp.status_code == 400
     assert "invalid" in resp.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_verify_otp_expired_does_not_increment_attempts(mock_db, mock_redis):
+    redis_client, store = mock_redis
+    service = AuthService(mock_db)
+
+    with patch("app.auth.services.get_redis_client", return_value=redis_client):
+        with pytest.raises(HTTPException) as exc_info:
+            await service.verify_otp_and_reset_password(
+                email="test@example.com",
+                otp="999999",
+                new_password="NewPassw0rd!",
+            )
+
+    assert exc_info.value.status_code == 400
+    assert "otp_attempts:test@example.com" not in store
+    redis_client.incr.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_verify_otp_wrong_value_increments_attempts(mock_db, mock_redis):
+    redis_client, store = mock_redis
+    service = AuthService(mock_db)
+    store["pwd_reset_otp:test@example.com"] = "123456"
+
+    with patch("app.auth.services.get_redis_client", return_value=redis_client):
+        with pytest.raises(HTTPException) as exc_info:
+            await service.verify_otp_and_reset_password(
+                email="test@example.com",
+                otp="000000",
+                new_password="NewPassw0rd!",
+            )
+
+    assert exc_info.value.status_code == 400
+    assert store["otp_attempts:test@example.com"] == 1
+    redis_client.expire.assert_awaited_once_with("otp_attempts:test@example.com", 900)

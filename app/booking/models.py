@@ -9,11 +9,12 @@ This module defines the database models for booking operations:
 - Payment and transaction models
 """
 
-from sqlalchemy import Column, Integer, String, DateTime, Boolean, Text, Float, JSON, ForeignKey, Enum
+from sqlalchemy import Column, Integer, String, DateTime, Boolean, Text, Numeric, JSON, ForeignKey, Enum, UniqueConstraint
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 import enum
 from datetime import datetime
+from decimal import Decimal
 
 from app.core.database import Base
 from app.core.mixins import TenantMixin
@@ -121,10 +122,13 @@ class FlightBooking(Base, TenantMixin):
     flight details, pricing, and booking status.
     """
     __tablename__ = "flight_bookings"
+    __table_args__ = (
+        UniqueConstraint('booking_reference', 'tenant_id', name='uq_flight_booking_ref_tenant'),
+    )
     
     # Primary identification
     id = Column(Integer, primary_key=True, index=True)
-    booking_reference = Column(String(20), unique=True, index=True, nullable=False)
+    booking_reference = Column(String(20), index=True, nullable=False)
     
     # User relationship
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
@@ -150,9 +154,9 @@ class FlightBooking(Base, TenantMixin):
     passenger_details = Column(JSON, nullable=False)  # Store passenger info as JSON
     
     # Pricing and payment
-    base_fare = Column(Float, nullable=False)
-    taxes = Column(Float, nullable=False)
-    total_amount = Column(Float, nullable=False)
+    base_fare = Column(Numeric(14, 2), nullable=False)
+    taxes = Column(Numeric(14, 2), nullable=False)
+    total_amount = Column(Numeric(14, 2), nullable=False)
     currency = Column(String(3), default="INR")
     payment_method = Column(Enum(PaymentMethod), nullable=False)
     payment_status = Column(Enum(PaymentStatus), default=PaymentStatus.PENDING)
@@ -160,11 +164,12 @@ class FlightBooking(Base, TenantMixin):
     # Booking status
     status = Column(Enum(BookingStatus), default=BookingStatus.PENDING)
     confirmation_number = Column(String(50), nullable=True)  # From airline
+    pnr = Column(String(10), nullable=True)  # Passenger Name Record
     
     # Additional information
     special_requests = Column(Text, nullable=True)
     cancellation_reason = Column(Text, nullable=True)
-    refund_amount = Column(Float, nullable=True)
+    refund_amount = Column(Numeric(14, 2), nullable=True)
     
     # Audit fields
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -183,10 +188,13 @@ class HotelBooking(Base, TenantMixin):
     room information, pricing, and booking status.
     """
     __tablename__ = "hotel_bookings"
+    __table_args__ = (
+        UniqueConstraint('booking_reference', 'tenant_id', name='uq_hotel_booking_ref_tenant'),
+    )
     
     # Primary identification
     id = Column(Integer, primary_key=True, index=True)
-    booking_reference = Column(String(20), unique=True, index=True, nullable=False)
+    booking_reference = Column(String(20), index=True, nullable=False)
     
     # User relationship
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
@@ -215,10 +223,10 @@ class HotelBooking(Base, TenantMixin):
     special_requests = Column(Text, nullable=True)
     
     # Pricing and payment
-    room_rate = Column(Float, nullable=False)  # Rate per night
-    base_amount = Column(Float, nullable=False, default=0.0)
-    taxes = Column(Float, nullable=False, default=0.0)
-    total_amount = Column(Float, nullable=False)
+    room_rate = Column(Numeric(14, 2), nullable=False)  # Rate per night
+    base_amount = Column(Numeric(14, 2), nullable=False, default=Decimal("0.00"))
+    taxes = Column(Numeric(14, 2), nullable=False, default=Decimal("0.00"))
+    total_amount = Column(Numeric(14, 2), nullable=False)
     currency = Column(String(3), default="INR")
     payment_method = Column(Enum(PaymentMethod), nullable=False)
     payment_status = Column(Enum(PaymentStatus), default=PaymentStatus.PENDING)
@@ -229,7 +237,7 @@ class HotelBooking(Base, TenantMixin):
     
     # Additional information
     cancellation_reason = Column(Text, nullable=True)
-    refund_amount = Column(Float, nullable=True)
+    refund_amount = Column(Numeric(14, 2), nullable=True)
     cancellation_policy = Column(String(100), nullable=True)
     
     # Audit fields
@@ -246,10 +254,13 @@ class BusBooking(Base, TenantMixin):
     journey information, pricing, and booking status.
     """
     __tablename__ = "bus_bookings"
+    __table_args__ = (
+        UniqueConstraint('booking_reference', 'tenant_id', name='uq_bus_booking_ref_tenant'),
+    )
     
     # Primary identification
     id = Column(Integer, primary_key=True, index=True)
-    booking_reference = Column(String(20), unique=True, index=True, nullable=False)
+    booking_reference = Column(String(20), index=True, nullable=False)
     
     # User relationship
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
@@ -277,10 +288,10 @@ class BusBooking(Base, TenantMixin):
     passenger_details = Column(JSON, nullable=False)  # Store passenger info as JSON
     
     # Pricing and payment
-    fare_per_passenger = Column(Float, nullable=False)
-    base_amount = Column(Float, nullable=False, default=0.0)
-    taxes = Column(Float, nullable=False, default=0.0)
-    total_amount = Column(Float, nullable=False)
+    fare_per_passenger = Column(Numeric(14, 2), nullable=False)
+    base_amount = Column(Numeric(14, 2), nullable=False, default=Decimal("0.00"))
+    taxes = Column(Numeric(14, 2), nullable=False, default=Decimal("0.00"))
+    total_amount = Column(Numeric(14, 2), nullable=False)
     currency = Column(String(3), default="INR")
     payment_method = Column(Enum(PaymentMethod), nullable=False)
     payment_status = Column(Enum(PaymentStatus), default=PaymentStatus.PENDING)
@@ -288,13 +299,14 @@ class BusBooking(Base, TenantMixin):
     # Booking status
     status = Column(Enum(BookingStatus), default=BookingStatus.PENDING)
     confirmation_number = Column(String(50), nullable=True)  # From bus operator
+    ticket_number = Column(String(20), nullable=True)  # Unique ticket identifier
     
     # Additional information
     boarding_point = Column(String(255), nullable=True)
     dropping_point = Column(String(255), nullable=True)
     special_requests = Column(Text, nullable=True)
     cancellation_reason = Column(Text, nullable=True)
-    refund_amount = Column(Float, nullable=True)
+    refund_amount = Column(Numeric(14, 2), nullable=True)
     
     # Audit fields
     created_at = Column(DateTime(timezone=True), server_default=func.now())

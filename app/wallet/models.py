@@ -8,10 +8,11 @@ This module defines database models for wallet operations:
 - WalletTopupRequest: Top-up requests for approval
 """
 
-from sqlalchemy import String, Text, ForeignKey, Index
+from sqlalchemy import String, Text, ForeignKey, Index, Numeric
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 from typing import Optional, List, TYPE_CHECKING
+from decimal import Decimal
 import enum
 from datetime import datetime
 
@@ -70,24 +71,24 @@ class Wallet(Base, TenantMixin):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), unique=True)
     
     # Balance fields
-    balance: Mapped[float] = mapped_column(default=0.0)
-    hold_amount: Mapped[float] = mapped_column(default=0.0)  # Amount on hold for pending transactions
+    balance: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=Decimal("0.00"))
+    hold_amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=Decimal("0.00"))  # Amount on hold for pending transactions
     currency: Mapped[str] = mapped_column(String(3), default="INR")
     
     # Credit limit (for agents)
-    credit_limit: Mapped[float] = mapped_column(default=0.0)
-    credit_used: Mapped[float] = mapped_column(default=0.0)
+    credit_limit: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=Decimal("0.00"))
+    credit_used: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=Decimal("0.00"))
     
     # Status
     status: Mapped[WalletStatus] = mapped_column(default=WalletStatus.ACTIVE)
     
     # Limits
-    daily_transaction_limit: Mapped[float] = mapped_column(default=100000.0)  # Max daily transactions
-    min_balance: Mapped[float] = mapped_column(default=0.0)  # Minimum balance to maintain
+    daily_transaction_limit: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=Decimal("100000.00"))  # Max daily transactions
+    min_balance: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=Decimal("0.00"))  # Minimum balance to maintain
     
     # Statistics
-    total_credited: Mapped[float] = mapped_column(default=0.0)
-    total_debited: Mapped[float] = mapped_column(default=0.0)
+    total_credited: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=Decimal("0.00"))
+    total_debited: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=Decimal("0.00"))
     last_transaction_at: Mapped[Optional[datetime]] = mapped_column(nullable=True)
     
     # Audit fields
@@ -141,9 +142,9 @@ class WalletTransaction(Base, TenantMixin):
     
     # Transaction details
     type: Mapped[TransactionType] = mapped_column()
-    amount: Mapped[float] = mapped_column()
-    balance_before: Mapped[float] = mapped_column()
-    balance_after: Mapped[float] = mapped_column()
+    amount: Mapped[Decimal] = mapped_column(Numeric(14, 2))
+    balance_before: Mapped[Decimal] = mapped_column(Numeric(14, 2))
+    balance_after: Mapped[Decimal] = mapped_column(Numeric(14, 2))
     
     # Status
     status: Mapped[TransactionStatus] = mapped_column(default=TransactionStatus.COMPLETED)
@@ -194,7 +195,7 @@ class WalletTopupRequest(Base, TenantMixin):
     request_ref: Mapped[str] = mapped_column(String(50), unique=True, index=True)
     
     # Request details
-    amount: Mapped[float] = mapped_column()
+    amount: Mapped[Decimal] = mapped_column(Numeric(14, 2))
     payment_method: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)  # bank_transfer, upi, etc.
     
     # Payment reference (if paid online)
@@ -244,8 +245,8 @@ class CreditLimit(Base, TenantMixin):
     wallet_id: Mapped[int] = mapped_column(ForeignKey("wallets.id"), index=True)
     
     # Credit limit change
-    previous_limit: Mapped[float] = mapped_column()
-    new_limit: Mapped[float] = mapped_column()
+    previous_limit: Mapped[Decimal] = mapped_column(Numeric(14, 2))
+    new_limit: Mapped[Decimal] = mapped_column(Numeric(14, 2))
     
     # Reason and approval
     reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

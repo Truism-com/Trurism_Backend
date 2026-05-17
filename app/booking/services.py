@@ -12,8 +12,9 @@ This module contains business logic for booking operations:
 import uuid
 import asyncio
 import random
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional, Dict, Any
+from decimal import Decimal
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, and_
 from fastapi import HTTPException, status
@@ -165,7 +166,7 @@ class FlightBookingService(BaseBookingService):
                 flight_booking.payment_status = PaymentStatus.SUCCESS
                 flight_booking.status = BookingStatus.CONFIRMED
                 flight_booking.confirmation_number = f"FL{flight_booking.id:06d}"
-                flight_booking.pnr = self._generate_pnr()
+                flight_booking.pnr = f"PNR{flight_booking.id:06d}"
             else:
                 flight_booking.payment_status = PaymentStatus.FAILED
                 flight_booking.status = BookingStatus.PENDING
@@ -250,7 +251,7 @@ class FlightBookingService(BaseBookingService):
             raise HTTPException(status_code=400, detail="Already cancelled")
         
         # Calculate refund (simplified)
-        refund_amount = booking.total_amount * 0.8 if (booking.departure_time - datetime.utcnow()).total_seconds() > 86400 else 0
+        refund_amount = booking.total_amount * Decimal("0.8") if (booking.departure_time - datetime.now(timezone.utc)).total_seconds() > 86400 else Decimal("0")
         
         # Process refund via processor
         if refund_amount > 0:
@@ -265,7 +266,7 @@ class FlightBookingService(BaseBookingService):
         
         booking.status = BookingStatus.CANCELLED
         booking.refund_amount = refund_amount
-        booking.payment_status = PaymentStatus.REFUNDED if refund_amount > 0 else PaymentStatus.FAILED
+        booking.payment_status = PaymentStatus.REFUNDED if refund_amount > 0 else booking.payment_status
         
         await self.db.commit()
         await self.db.refresh(booking)
@@ -395,6 +396,43 @@ class HotelBookingService(BaseBookingService):
         result = await self.db.execute(query)
         return result.scalars().all()
 
+    async def cancel_hotel_booking(
+        self,
+        booking_id: int,
+        user_id: int,
+        cancel_request: CancelBookingRequest
+    ) -> HotelBooking:
+        """Cancel hotel booking and process refund."""
+        booking = await self.get_hotel_booking(booking_id, user_id)
+        
+        if not booking:
+            raise HTTPException(status_code=404, detail="Booking not found")
+        
+        if booking.status in [BookingStatus.CANCELLED, BookingStatus.REFUNDED]:
+            raise HTTPException(status_code=400, detail="Already cancelled")
+        
+        # Calculate refund (80% if more than 24h before checkin)
+        time_until_checkin = (booking.checkin_date - datetime.now(timezone.utc)).total_seconds()
+        refund_amount = booking.total_amount * Decimal("0.8") if time_until_checkin > 86400 else Decimal("0")
+        
+        if refund_amount > 0:
+            await self.payment_processor.process_refund(
+                user_id=user_id,
+                amount=refund_amount,
+                booking_id=booking_id,
+                booking_type="hotel",
+                original_payment_method=booking.payment_method,
+                reason=cancel_request.reason
+            )
+        
+        booking.status = BookingStatus.CANCELLED
+        booking.refund_amount = refund_amount
+        booking.payment_status = PaymentStatus.REFUNDED if refund_amount > 0 else booking.payment_status
+        
+        await self.db.commit()
+        await self.db.refresh(booking)
+        return booking
+
 
 class BusBookingError(Exception):
     """Exception for bus booking errors."""
@@ -480,7 +518,9 @@ class BusBookingService(BaseBookingService):
             if payment_result['status'] == PaymentStatus.SUCCESS:
                 bus_booking.payment_status = PaymentStatus.SUCCESS
                 bus_booking.status = BookingStatus.CONFIRMED
-                bus_booking.ticket_number = self._generate_ticket_number()
+                confirmation_number = f"BUS{bus_booking.id:06d}"
+                bus_booking.confirmation_number = confirmation_number
+                bus_booking.ticket_number = confirmation_number
             
             await self.db.commit()
             await self.db.refresh(bus_booking)
@@ -530,3 +570,40 @@ class BusBookingService(BaseBookingService):
         query = query.order_by(BusBooking.created_at.desc()).offset(skip).limit(limit)
         result = await self.db.execute(query)
         return result.scalars().all()
+
+    async def cancel_bus_booking(
+        self,
+        booking_id: int,
+        user_id: int,
+        cancel_request: CancelBookingRequest
+    ) -> BusBooking:
+        """Cancel bus booking and process refund."""
+        booking = await self.get_bus_booking(booking_id, user_id)
+        
+        if not booking:
+            raise HTTPException(status_code=404, detail="Booking not found")
+        
+        if booking.status in [BookingStatus.CANCELLED, BookingStatus.REFUNDED]:
+            raise HTTPException(status_code=400, detail="Already cancelled")
+        
+        # Calculate refund (80% if more than 24h before departure)
+        time_until_departure = (booking.departure_time - datetime.now(timezone.utc)).total_seconds()
+        refund_amount = booking.total_amount * Decimal("0.8") if time_until_departure > 86400 else Decimal("0")
+        
+        if refund_amount > 0:
+            await self.payment_processor.process_refund(
+                user_id=user_id,
+                amount=refund_amount,
+                booking_id=booking_id,
+                booking_type="bus",
+                original_payment_method=booking.payment_method,
+                reason=cancel_request.reason
+            )
+        
+        booking.status = BookingStatus.CANCELLED
+        booking.refund_amount = refund_amount
+        booking.payment_status = PaymentStatus.REFUNDED if refund_amount > 0 else booking.payment_status
+        
+        await self.db.commit()
+        await self.db.refresh(booking)
+        return booking
