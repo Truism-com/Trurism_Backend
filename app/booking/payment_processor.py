@@ -365,17 +365,38 @@ class BookingPaymentProcessor:
             )
         except Exception as debit_err:
             logger.error(f"Hold-to-debit failed for hold {hold_id}: {debit_err}")
-            # Razorpay already captured but wallet debit failed.
-            # Return success with warning -- manual reconciliation needed.
+
+            rollback_session = None
+            for candidate_session in (
+                getattr(self.wallet_service, "db", None),
+                getattr(self.wallet_service, "session", None),
+                getattr(self, "db", None),
+                getattr(self, "session", None),
+            ):
+                if isinstance(candidate_session, AsyncSession):
+                    rollback_session = candidate_session
+                    break
+
+            if rollback_session is not None:
+                try:
+                    await rollback_session.rollback()
+                except Exception as rollback_err:
+                    logger.error(
+                        f"Failed to rollback session after hold-to-debit failure for hold {hold_id}: {rollback_err}"
+                    )
+
+            # Razorpay was captured but the wallet portion was not debited successfully.
+            # Return a degraded result so callers do not treat the booking as fully paid.
             return {
-                "status": PaymentStatus.SUCCESS,
+                "status": PaymentStatus.FAILED,
                 "payment_method": PaymentMethod.WALLET,
                 "razorpay_payment_id": razorpay_payment_id,
                 "razorpay_order_id": razorpay_order_id,
-                "amount_paid": total_amount,
-                "wallet_amount": 0,  # Wallet portion not debited
+                "amount_paid": razorpay_amount,
+                "wallet_amount": 0,
                 "razorpay_amount": razorpay_amount,
                 "message": "Razorpay captured but wallet debit failed. Manual reconciliation required.",
+                "requires_manual_reconciliation": True,
                 "processed_at": datetime.utcnow()
             }
         
