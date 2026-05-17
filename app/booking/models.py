@@ -14,6 +14,7 @@ from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 import enum
 from datetime import datetime
+from decimal import Decimal
 
 from app.core.database import Base
 from app.core.mixins import TenantMixin
@@ -223,8 +224,8 @@ class HotelBooking(Base, TenantMixin):
     
     # Pricing and payment
     room_rate = Column(Numeric(14, 2), nullable=False)  # Rate per night
-    base_amount = Column(Numeric(14, 2), nullable=False, default=0.0)
-    taxes = Column(Numeric(14, 2), nullable=False, default=0.0)
+    base_amount = Column(Numeric(14, 2), nullable=False, default=Decimal("0.00"))
+    taxes = Column(Numeric(14, 2), nullable=False, default=Decimal("0.00"))
     total_amount = Column(Numeric(14, 2), nullable=False)
     currency = Column(String(3), default="INR")
     payment_method = Column(Enum(PaymentMethod), nullable=False)
@@ -288,8 +289,8 @@ class BusBooking(Base, TenantMixin):
     
     # Pricing and payment
     fare_per_passenger = Column(Numeric(14, 2), nullable=False)
-    base_amount = Column(Numeric(14, 2), nullable=False, default=0.0)
-    taxes = Column(Numeric(14, 2), nullable=False, default=0.0)
+    base_amount = Column(Numeric(14, 2), nullable=False, default=Decimal("0.00"))
+    taxes = Column(Numeric(14, 2), nullable=False, default=Decimal("0.00"))
     total_amount = Column(Numeric(14, 2), nullable=False)
     currency = Column(String(3), default="INR")
     payment_method = Column(Enum(PaymentMethod), nullable=False)
