@@ -16,6 +16,7 @@ from typing import Optional, Dict, Any, Tuple
 from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
+from sqlalchemy.exc import IntegrityError
 from fastapi import HTTPException, status
 
 from app.payments.models import (
@@ -683,7 +684,7 @@ class WebhookService:
         # Flush to trigger unique constraint check before processing
         try:
             await self.db.flush()
-        except Exception as conflict_err:
+        except IntegrityError as conflict_err:
             # Unique constraint violation = duplicate event (race condition)
             await self.db.rollback()
             logger.info(f"Webhook duplicate detected via constraint: {resolved_event_id}")
