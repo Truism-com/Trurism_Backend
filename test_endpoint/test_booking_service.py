@@ -35,7 +35,7 @@ async def test_email_failure_does_not_crash_booking():
 
     failing_email = AsyncMock(side_effect=Exception("SMTP timeout"))
 
-    with patch("app.booking.services.email_service.send_booking_confirmation", failing_email):
+    with patch("app.services.email.email_service.send_booking_confirmation", failing_email):
         from app.booking.services import FlightBookingService
         service = FlightBookingService(db=mock_db, tenant_id=1)
     
