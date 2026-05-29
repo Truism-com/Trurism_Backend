@@ -63,7 +63,7 @@ class XMLAgencyClient:
 
         self._client: Optional[Client] = None
 
-    def _get_client(self) -> Client:
+    def _get_client(self) -> "Client":
         """Lazy-load synchronous zeep Client with 24-hour WSDL cache."""
         if self._client is None:
             cache_path = os.path.join(os.path.expanduser("~"), ".zeep_wsdl_cache.db")
