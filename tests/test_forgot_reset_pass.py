@@ -1,5 +1,5 @@
 """
-Tests for forgot-password / reset-password flow.
+Tests for forgot-password / reset_password flow.
 Mocks aiosmtplib and Redis so no real services are needed.
 """
 import pytest
@@ -63,7 +63,7 @@ async def test_forgot_password_sends_otp(mock_db, mock_redis):
 
     with (
         patch("app.auth.services.get_redis_client", return_value=redis_client),
-        patch("app.auth.api.email_service.send_otp", new_callable=AsyncMock) as mock_send,
+        patch("app.services.email.email_service.send_otp", new_callable=AsyncMock) as mock_send,
         patch("app.auth.services.AuthService.get_user_by_email", new_callable=AsyncMock, return_value=user),
         patch("app.core.database.get_database_session", return_value=mock_db),
     ):
@@ -95,7 +95,7 @@ async def test_reset_password_success(mock_db, mock_redis):
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             resp = await client.post(
-                "/auth/reset-password",
+                "/auth/reset_password",
                 json={
                     "email": user.email,
                     "otp": "123456",
@@ -104,17 +104,17 @@ async def test_reset_password_success(mock_db, mock_redis):
             )
 
     assert resp.status_code == 200
-    # OTP consumed
+
     assert f"pwd_reset_otp:{user.email}" not in store
-    # Password actually changed
+
     assert SecurityManager.verify_password("NewPassw0rd!", user.password_hash)
 
 
 @pytest.mark.asyncio
 async def test_reset_password_expired_otp(mock_db, mock_redis):
-    """Expired/missing OTP → HTTP 400."""
+
     redis_client, store = mock_redis
-    # No OTP in store = simulates expiry
+
 
     app.dependency_overrides[get_database_session] = lambda: mock_db
 
@@ -122,7 +122,7 @@ async def test_reset_password_expired_otp(mock_db, mock_redis):
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             resp = await client.post(
-                "/auth/reset-password",
+                "/auth/reset_password",
                 json={
                     "email": "test@example.com",
                     "otp": "999999",
@@ -147,7 +147,7 @@ async def test_reset_password_wrong_otp(mock_db, mock_redis):
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             resp = await client.post(
-                "/auth/reset-password",
+                "/auth/reset_password",
                 json={
                     "email": "test@example.com",
                     "otp": "000000",

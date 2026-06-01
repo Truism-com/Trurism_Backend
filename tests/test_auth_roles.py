@@ -6,7 +6,7 @@ from app.auth.models import User, UserRole
 def test_admin_registration_rejected():
     data = {
         "email": "test@admin.com",
-        "password": "strongpassword123",
+        "password": "Strongpassword123!",
         "first_name": "Test",
         "last_name": "Admin",
         "role": UserRole.ADMIN
@@ -19,7 +19,7 @@ def test_admin_registration_rejected():
 def test_superadmin_registration_rejected():
     data = {
         "email": "test@superadmin.com",
-        "password": "strongpassword123",
+        "password": "Strongpassword123!",
         "first_name": "Test",
         "last_name": "SuperAdmin",
         "role": UserRole.SUPERADMIN
@@ -32,9 +32,8 @@ def test_superadmin_registration_rejected():
 def test_customer_registration_allowed():
     data = {
         "email": "test@customer.com",
-        "password": "strongpassword123",
-        "first_name": "Test",
-        "last_name": "Customer",
+        "password": "Strongpassword123!",  
+        "name": "Test Customer",          
         "role": UserRole.CUSTOMER
     }
     req = UserRegisterRequest(**data)
@@ -54,6 +53,5 @@ def test_user_is_superadmin_property():
     admin_user = User(role=UserRole.ADMIN)
     superadmin_user = User(role=UserRole.SUPERADMIN)
     
-    # Only SUPERADMIN is superadmin
     assert admin_user.is_superadmin is False
     assert superadmin_user.is_superadmin is True

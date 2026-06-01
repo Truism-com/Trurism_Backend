@@ -304,7 +304,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     # Strip internal Pydantic URL field from error details
     errors = []
     for err in exc.errors():
-        clean_err = {k: v for k, v in err.items() if k != "url"}
+        clean_err = {k: v for k, v in err.items() if k not in ("url", "ctx")}
         errors.append(clean_err)
     
     return JSONResponse(
