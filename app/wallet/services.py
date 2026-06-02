@@ -578,7 +578,11 @@ class WalletService:
             "expires_at": expires_at.isoformat(),
             "status": "active"
         }
-        await set_wallet_hold(hold_id, hold_data, ttl=expiry_minutes * 60)
+        if self.redis:
+            try:
+                await set_wallet_hold(hold_id, hold_data, ttl=expiry_minutes * 60)
+            except Exception as e:
+                logger.warning(f"Redis hold cache write failed (non-fatal): {e}")
         
         logger.info(f"Placed hold {hold_id} for {amount} on wallet {wallet.id}")
         

@@ -10,7 +10,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = '004_merge_heads'
-down_revision = ('002_add_offline_modules', '002', '003_add_dashboard_pricing_company', '003_add_wallet_system')
+down_revision = ('002_add_offline_modules', '002_add_payment_system', '003_add_dashboard_pricing_company', '003_add_wallet_system')
 branch_labels = None
 depends_on = None
 

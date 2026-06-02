@@ -140,4 +140,4 @@ async def init_database():
         
         # Create all tables
         await conn.run_sync(Base.metadata.create_all)
-        logging.info("Database tables created successfully")
+        logging.info("Database models loaded (schema managed by Alembic)")

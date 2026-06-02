@@ -184,6 +184,18 @@ class Settings(BaseSettings):
     
     # Note: cors_origins and trusted_hosts are parsed in main.py
     
+    @field_validator("razorpay_webhook_secret")
+    @classmethod
+    def validate_webhook_secret(cls, v: str, info) -> str:
+        """Ensure Razorpay webhook secret is set in production/staging."""
+        env = info.data.get("environment", "development")
+        if env in ("production", "staging") and not v:
+            raise ValueError(
+                "RAZORPAY_WEBHOOK_SECRET must be set in production. "
+                "All payment webhooks will be rejected without it."
+            )
+        return v
+    
     model_config = {
         "env_file": ".env",
         "case_sensitive": False,
