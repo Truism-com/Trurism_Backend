@@ -20,6 +20,44 @@ depends_on = None
 
 def upgrade() -> None:
     # =========================================================================
+    # TENANT TABLE (referenced by CMS, Settings, and other module tables)
+    # =========================================================================
+    op.create_table(
+        'tenants',
+        sa.Column('id', sa.Integer(), nullable=False),
+        sa.Column('code', sa.String(50), nullable=False),
+        sa.Column('name', sa.String(255), nullable=False),
+        sa.Column('domain', sa.String(255), nullable=False),
+        sa.Column('subdomain', sa.String(100), nullable=True),
+        sa.Column('is_active', sa.Boolean(), nullable=False, server_default=sa.text('true')),
+        sa.Column('is_verified', sa.Boolean(), nullable=False, server_default=sa.text('false')),
+        sa.Column('logo_url', sa.String(500), nullable=True),
+        sa.Column('favicon_url', sa.String(500), nullable=True),
+        sa.Column('brand_name', sa.String(255), nullable=True),
+        sa.Column('theme_colors', sa.JSON(), nullable=True),
+        sa.Column('support_email', sa.String(255), nullable=True),
+        sa.Column('support_phone', sa.String(50), nullable=True),
+        sa.Column('support_whatsapp', sa.String(50), nullable=True),
+        sa.Column('social_links', sa.JSON(), nullable=True),
+        sa.Column('enabled_modules', sa.JSON(), nullable=True),
+        sa.Column('default_currency', sa.String(3), nullable=False, server_default='INR'),
+        sa.Column('default_language', sa.String(5), nullable=False, server_default='en'),
+        sa.Column('timezone', sa.String(50), nullable=False, server_default='Asia/Kolkata'),
+        sa.Column('company_name', sa.String(255), nullable=True),
+        sa.Column('gst_number', sa.String(20), nullable=True),
+        sa.Column('pan_number', sa.String(20), nullable=True),
+        sa.Column('address', sa.Text(), nullable=True),
+        sa.Column('custom_settings', sa.JSON(), nullable=True),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()')),
+        sa.Column('updated_at', sa.DateTime(timezone=True), nullable=True),
+        sa.PrimaryKeyConstraint('id'),
+        sa.UniqueConstraint('code'),
+        sa.UniqueConstraint('domain'),
+    )
+    op.create_index('idx_tenant_code', 'tenants', ['code'])
+    op.create_index('idx_tenant_domain', 'tenants', ['domain'])
+
+    # =========================================================================
     # HOLIDAY MODULE TABLES
     # =========================================================================
     
@@ -818,3 +856,8 @@ def downgrade() -> None:
     op.drop_table('holiday_packages')
     op.drop_table('package_destinations')
     op.drop_table('package_themes')
+    
+    # Drop Tenant table (created by this migration)
+    op.drop_index('idx_tenant_domain', 'tenants')
+    op.drop_index('idx_tenant_code', 'tenants')
+    op.drop_table('tenants')
