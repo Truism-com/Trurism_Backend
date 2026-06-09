@@ -11,13 +11,14 @@ This migration creates the wallet system tables:
 - credit_limits: Credit limit history for agents
 """
 
+from typing import Union
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 # revision identifiers
-revision = '003_add_wallet_system'
-down_revision = '002'
+revision: str = "003_add_wallet_system"
+down_revision: Union[str, None] = "002_add_payment_system"
 branch_labels = None
 depends_on = None
 
