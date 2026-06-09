@@ -231,10 +231,11 @@ async def gate_docs_by_ip(request: Request, call_next):
         if not settings.debug:
             if not settings.docs_allowed_ips.strip():
                 return JSONResponse(status_code=404, content={"detail": "Not Found"})
-            allowed = {ip.strip() for ip in settings.docs_allowed_ips.split(",") if ip.strip()}
-            client_ip = request.client.host if request.client else None
-            if client_ip not in allowed:
-                return JSONResponse(status_code=404, content={"detail": "Not Found"})
+            if settings.docs_allowed_ips.strip() != "*":
+                allowed = {ip.strip() for ip in settings.docs_allowed_ips.split(",") if ip.strip()}
+                client_ip = request.client.host if request.client else None
+                if client_ip not in allowed:
+                    return JSONResponse(status_code=404, content={"detail": "Not Found"})
     return await call_next(request)
 
 

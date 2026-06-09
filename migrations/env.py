@@ -92,7 +92,7 @@ def get_url():
             # Check if this is a remote database that requires SSL
             is_local = "localhost" in db_url or "127.0.0.1" in db_url
             is_production = settings.environment in ["production", "staging"]
-            is_remote_host = any(host in db_url for host in ["render.com", ".onrender.com", ".amazonaws.com", "cloud", "managed", ".supabase.co"])
+            is_remote_host = any(host in db_url for host in ["render.com", ".onrender.com", ".amazonaws.com", "cloud", "managed", ".supabase.co", "pooler.supabase.com"])
             
             # Only add SSL for remote/production databases, not local development
             if (is_production or is_remote_host) and not is_local:
@@ -156,8 +156,11 @@ def run_migrations_online() -> None:
             poolclass=pool.NullPool,
             future=True,
         )
+        with connectable.connect() as connection:
+            do_run_migrations(connection)
+        connectable.dispose()
     else:
-        connectable = AsyncEngine(
+        async_connectable = AsyncEngine(
             engine_from_config(
                 {"sqlalchemy.url": url},
                 prefix="sqlalchemy.",
@@ -167,22 +170,11 @@ def run_migrations_online() -> None:
             )
         )
 
-    async def do_run_migrations_async(connection: Connection):
-        await connection.run_sync(do_run_migrations)
+        async def run_async_migrations():
+            async with async_connectable.connect() as connection:
+                await connection.run_sync(do_run_migrations)
+            await async_connectable.dispose()
 
-    async def run_async_migrations():
-        async with connectable.connect() as connection:
-            await do_run_migrations_async(connection)
-        await connectable.dispose()
-
-    def run_sync_migrations():
-        with connectable.connect() as connection:
-            do_run_migrations(connection)
-        connectable.dispose()
-
-    if is_psycopg:
-        run_sync_migrations()
-    else:
         asyncio.run(run_async_migrations())
 
 
