@@ -91,10 +91,6 @@ def upgrade() -> None:
                               type_=sa.Numeric(14, 2),
                               existing_type=sa.Float(),
                               existing_nullable=False)
-        batch_op.alter_column('convenience_fee',
-                              type_=sa.Numeric(14, 2),
-                              existing_type=sa.Float(),
-                              existing_nullable=False)
         batch_op.alter_column('refund_amount',
                               type_=sa.Numeric(14, 2),
                               existing_type=sa.Float(),
@@ -106,15 +102,15 @@ def upgrade() -> None:
                               type_=sa.Numeric(14, 2),
                               existing_type=sa.Float(),
                               existing_nullable=False)
-        batch_op.alter_column('base_fare',
+        batch_op.alter_column('room_rate',
+                              type_=sa.Numeric(14, 2),
+                              existing_type=sa.Float(),
+                              existing_nullable=False)
+        batch_op.alter_column('base_amount',
                               type_=sa.Numeric(14, 2),
                               existing_type=sa.Float(),
                               existing_nullable=False)
         batch_op.alter_column('taxes',
-                              type_=sa.Numeric(14, 2),
-                              existing_type=sa.Float(),
-                              existing_nullable=False)
-        batch_op.alter_column('convenience_fee',
                               type_=sa.Numeric(14, 2),
                               existing_type=sa.Float(),
                               existing_nullable=False)
@@ -129,15 +125,15 @@ def upgrade() -> None:
                               type_=sa.Numeric(14, 2),
                               existing_type=sa.Float(),
                               existing_nullable=False)
-        batch_op.alter_column('base_fare',
+        batch_op.alter_column('fare_per_passenger',
+                              type_=sa.Numeric(14, 2),
+                              existing_type=sa.Float(),
+                              existing_nullable=False)
+        batch_op.alter_column('base_amount',
                               type_=sa.Numeric(14, 2),
                               existing_type=sa.Float(),
                               existing_nullable=False)
         batch_op.alter_column('taxes',
-                              type_=sa.Numeric(14, 2),
-                              existing_type=sa.Float(),
-                              existing_nullable=False)
-        batch_op.alter_column('convenience_fee',
                               type_=sa.Numeric(14, 2),
                               existing_type=sa.Float(),
                               existing_nullable=False)
@@ -156,15 +152,15 @@ def downgrade() -> None:
                               type_=sa.Float(),
                               existing_type=sa.Numeric(14, 2),
                               existing_nullable=True)
-        batch_op.alter_column('convenience_fee',
-                              type_=sa.Float(),
-                              existing_type=sa.Numeric(14, 2),
-                              existing_nullable=False)
         batch_op.alter_column('taxes',
                               type_=sa.Float(),
                               existing_type=sa.Numeric(14, 2),
                               existing_nullable=False)
-        batch_op.alter_column('base_fare',
+        batch_op.alter_column('base_amount',
+                              type_=sa.Float(),
+                              existing_type=sa.Numeric(14, 2),
+                              existing_nullable=False)
+        batch_op.alter_column('fare_per_passenger',
                               type_=sa.Float(),
                               existing_type=sa.Numeric(14, 2),
                               existing_nullable=False)
@@ -179,15 +175,15 @@ def downgrade() -> None:
                               type_=sa.Float(),
                               existing_type=sa.Numeric(14, 2),
                               existing_nullable=True)
-        batch_op.alter_column('convenience_fee',
-                              type_=sa.Float(),
-                              existing_type=sa.Numeric(14, 2),
-                              existing_nullable=False)
         batch_op.alter_column('taxes',
                               type_=sa.Float(),
                               existing_type=sa.Numeric(14, 2),
                               existing_nullable=False)
-        batch_op.alter_column('base_fare',
+        batch_op.alter_column('base_amount',
+                              type_=sa.Float(),
+                              existing_type=sa.Numeric(14, 2),
+                              existing_nullable=False)
+        batch_op.alter_column('room_rate',
                               type_=sa.Float(),
                               existing_type=sa.Numeric(14, 2),
                               existing_nullable=False)
@@ -202,10 +198,6 @@ def downgrade() -> None:
                               type_=sa.Float(),
                               existing_type=sa.Numeric(14, 2),
                               existing_nullable=True)
-        batch_op.alter_column('convenience_fee',
-                              type_=sa.Float(),
-                              existing_type=sa.Numeric(14, 2),
-                              existing_nullable=False)
         batch_op.alter_column('taxes',
                               type_=sa.Float(),
                               existing_type=sa.Numeric(14, 2),

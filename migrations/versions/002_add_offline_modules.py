@@ -57,6 +57,11 @@ def upgrade() -> None:
     op.create_index('idx_tenant_code', 'tenants', ['code'])
     op.create_index('idx_tenant_domain', 'tenants', ['domain'])
 
+    # Add tenant_id column to existing base tables (users, refresh_tokens, passengers, flight_bookings, hotel_bookings, bus_bookings)
+    for table in ['users', 'refresh_tokens', 'passengers', 'flight_bookings', 'hotel_bookings', 'bus_bookings']:
+        op.add_column(table, sa.Column('tenant_id', sa.Integer(), sa.ForeignKey('tenants.id'), nullable=True))
+        op.create_index(f'ix_{table}_tenant_id', table, ['tenant_id'])
+
     # =========================================================================
     # HOLIDAY MODULE TABLES
     # =========================================================================
@@ -718,26 +723,28 @@ def upgrade() -> None:
     # =========================================================================
     
     # Convenience Fees
-    op.create_table(
-        'convenience_fees',
-        sa.Column('id', sa.Integer(), nullable=False),
-        sa.Column('service_type', sa.String(50), nullable=False),
-        sa.Column('payment_mode', sa.String(20), nullable=False),
-        sa.Column('fee_type', sa.String(20), default='percentage'),
-        sa.Column('percentage', sa.Float(), default=0),
-        sa.Column('fixed_amount', sa.Float(), default=0),
-        sa.Column('min_fee', sa.Float(), default=0),
-        sa.Column('max_fee', sa.Float(), nullable=True),
-        sa.Column('gst_percentage', sa.Float(), default=18.0),
-        sa.Column('is_active', sa.Boolean(), default=True),
-        sa.Column('description', sa.String(500), nullable=True),
-        sa.Column('tenant_id', sa.Integer(), sa.ForeignKey('tenants.id'), nullable=True),
-        sa.Column('created_by_id', sa.Integer(), sa.ForeignKey('users.id'), nullable=True),
-        sa.Column('created_at', sa.DateTime(), nullable=True),
-        sa.Column('updated_at', sa.DateTime(), nullable=True),
-        sa.PrimaryKeyConstraint('id')
-    )
-    op.create_index('idx_fee_service_payment', 'convenience_fees', ['service_type', 'payment_mode'])
+    conn = op.get_bind()
+    if not conn.dialect.has_table(conn, "convenience_fees"):
+        op.create_table(
+            'convenience_fees',
+            sa.Column('id', sa.Integer(), nullable=False),
+            sa.Column('service_type', sa.String(50), nullable=False),
+            sa.Column('payment_mode', sa.String(20), nullable=False),
+            sa.Column('fee_type', sa.String(20), default='percentage'),
+            sa.Column('percentage', sa.Float(), default=0),
+            sa.Column('fixed_amount', sa.Float(), default=0),
+            sa.Column('min_fee', sa.Float(), default=0),
+            sa.Column('max_fee', sa.Float(), nullable=True),
+            sa.Column('gst_percentage', sa.Float(), default=18.0),
+            sa.Column('is_active', sa.Boolean(), default=True),
+            sa.Column('description', sa.String(500), nullable=True),
+            sa.Column('tenant_id', sa.Integer(), sa.ForeignKey('tenants.id'), nullable=True),
+            sa.Column('created_by_id', sa.Integer(), sa.ForeignKey('users.id'), nullable=True),
+            sa.Column('created_at', sa.DateTime(), nullable=True),
+            sa.Column('updated_at', sa.DateTime(), nullable=True),
+            sa.PrimaryKeyConstraint('id')
+        )
+        op.create_index('idx_fee_service_payment', 'convenience_fees', ['service_type', 'payment_mode'])
     
     # Staff Permissions
     op.create_table(
@@ -857,6 +864,11 @@ def downgrade() -> None:
     op.drop_table('package_destinations')
     op.drop_table('package_themes')
     
+    # Drop tenant_id column from base tables
+    for table in ['users', 'refresh_tokens', 'passengers', 'flight_bookings', 'hotel_bookings', 'bus_bookings']:
+        op.drop_index(f'ix_{table}_tenant_id', table_name=table)
+        op.drop_column(table, 'tenant_id')
+
     # Drop Tenant table (created by this migration)
     op.drop_index('idx_tenant_domain', 'tenants')
     op.drop_index('idx_tenant_code', 'tenants')

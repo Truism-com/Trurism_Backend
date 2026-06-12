@@ -122,7 +122,8 @@ class AuthService:
             return None
         if rt.is_revoked:
             return None
-        if rt.expires_at and rt.expires_at < datetime.utcnow():
+        from datetime import timezone
+        if rt.expires_at and rt.expires_at < datetime.now(timezone.utc):
             return None
         return rt
 

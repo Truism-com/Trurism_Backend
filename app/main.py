@@ -420,6 +420,107 @@ async def root():
     }
 
 
+@app.get("/debug/run-migrations", tags=["Debug"])
+async def debug_run_migrations(reset: bool = False):
+    """
+    Run migrations and seed the database.
+    Only available in development environment.
+    Pass reset=true to drop and recreate the public schema first.
+    """
+    if settings.environment != "development":
+        return JSONResponse(
+            status_code=403,
+            content={"detail": "Only allowed in development mode"}
+        )
+    try:
+        if reset:
+            from sqlalchemy import text
+            from app.core.database import engine
+            try:
+                logger.info("Resetting public schema...")
+                async with engine.begin() as conn:
+                    await conn.execute(text("DROP SCHEMA public CASCADE"))
+                    await conn.execute(text("CREATE SCHEMA public"))
+                    await conn.execute(text("GRANT ALL ON SCHEMA public TO postgres"))
+                    await conn.execute(text("GRANT ALL ON SCHEMA public TO public"))
+                logger.info("Public schema reset completed")
+                with open("debug_run.log", "a") as f:
+                    f.write("Reset public schema successfully\n")
+            except Exception as reset_err:
+                import traceback
+                tb = traceback.format_exc()
+                with open("debug_run.log", "a") as f:
+                    f.write(f"Reset failed: {reset_err}\n{tb}\n")
+                raise reset_err
+
+        from app.core.database import init_database
+        await init_database()
+        return {"status": "success", "message": "Migrations completed and database seeded"}
+    except Exception as e:
+        import traceback
+        tb = traceback.format_exc()
+        logger.error(f"Debug run-migrations failed: {e}\n{tb}")
+        return JSONResponse(
+            status_code=500,
+            content={
+                "status": "error",
+                "message": str(e),
+                "traceback": tb.split("\n"),
+                "type": type(e).__name__
+            }
+        )
+
+
+@app.get("/debug/kill-connections", tags=["Debug"])
+async def debug_kill_connections():
+    """
+    Kill all other active database connections to release locks.
+    Only available in development environment.
+    """
+    if settings.environment != "development":
+        return JSONResponse(
+            status_code=403,
+            content={"detail": "Only allowed in development mode"}
+        )
+    from sqlalchemy import text
+    from app.core.database import engine
+    try:
+        async with engine.begin() as conn:
+            await conn.execute(text("SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = current_database() AND pid <> pg_backend_pid()"))
+        return {"status": "success", "message": "Other database connections terminated"}
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "message": str(e)}
+        )
+
+
+@app.get("/debug/test-refresh", tags=["Debug"])
+async def debug_test_refresh():
+    """
+    Test refresh token validation and return diagnostic information.
+    Only available in development environment.
+    """
+    if settings.environment != "development":
+        return JSONResponse(
+            status_code=403,
+            content={"detail": "Only allowed in development mode"}
+        )
+    from app.core.security import SecurityManager
+    try:
+        payload = await SecurityManager.verify_token("dummy", "refresh")
+        return {"status": "success", "payload": payload}
+    except Exception as e:
+        import traceback
+        tb = traceback.format_exc()
+        return {
+            "status": "error",
+            "message": str(e),
+            "type": type(e).__name__,
+            "traceback": tb.split("\n")
+        }
+
+
 @app.post("/admin/init-db", tags=["Admin"], include_in_schema=True)
 async def manual_init_db(
     credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer())

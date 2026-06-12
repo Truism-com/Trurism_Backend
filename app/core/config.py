@@ -54,6 +54,7 @@ class Settings(BaseSettings):
     
     # Database Settings
     database_url: str = "postgresql+asyncpg://user:password@localhost:5432/travel_booking"
+    database_migration_url: Optional[str] = None
     database_pool_size: int = 10
     database_max_overflow: int = 20
     

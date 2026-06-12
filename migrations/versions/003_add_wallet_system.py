@@ -25,36 +25,28 @@ depends_on = None
 
 def upgrade():
     # Create wallet status enum
-    wallet_status_enum = postgresql.ENUM(
+    wallet_status_enum = sa.Enum(
         'active', 'suspended', 'closed',
-        name='walletstatus',
-        create_type=True
+        name='walletstatus'
     )
-    wallet_status_enum.create(op.get_bind(), checkfirst=True)
     
     # Create transaction type enum
-    transaction_type_enum = postgresql.ENUM(
+    transaction_type_enum = sa.Enum(
         'credit', 'debit', 'refund', 'topup', 'bonus', 'adjustment', 'transfer',
-        name='transactiontype',
-        create_type=True
+        name='transactiontype'
     )
-    transaction_type_enum.create(op.get_bind(), checkfirst=True)
     
     # Create transaction status enum
-    transaction_status_enum = postgresql.ENUM(
+    transaction_status_enum = sa.Enum(
         'pending', 'completed', 'failed', 'reversed',
-        name='transactionstatus',
-        create_type=True
+        name='transactionstatus'
     )
-    transaction_status_enum.create(op.get_bind(), checkfirst=True)
     
     # Create topup status enum
-    topup_status_enum = postgresql.ENUM(
+    topup_status_enum = sa.Enum(
         'pending', 'approved', 'rejected', 'completed',
-        name='topupstatus',
-        create_type=True
+        name='topupstatus'
     )
-    topup_status_enum.create(op.get_bind(), checkfirst=True)
     
     # Create wallets table
     op.create_table(

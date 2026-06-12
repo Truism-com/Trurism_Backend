@@ -100,7 +100,7 @@ def upgrade() -> None:
     op.create_table(
         "webhook_logs",
         sa.Column("id", sa.Integer(), primary_key=True, nullable=False),
-        sa.Column("event_type", sa.String(length=50), nullable=False, index=True),
+        sa.Column("event_type", sa.String(length=50), nullable=False),
         sa.Column("razorpay_event_id", sa.String(length=100), nullable=True, unique=True),
         sa.Column("payload", postgresql.JSON(astext_type=sa.Text()), nullable=False),
         sa.Column("signature", sa.String(length=255), nullable=True),

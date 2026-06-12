@@ -69,14 +69,14 @@ class User(Base, TenantMixin):
     address = Column(Text, nullable=True)
     
     # Role and permissions
-    role = Column(Enum(UserRole), default=UserRole.CUSTOMER, nullable=False)
+    role = Column(Enum(UserRole, values_callable=lambda x: [e.value for e in x]), default=UserRole.CUSTOMER, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
     is_verified = Column(Boolean, default=False, nullable=False)
     
     # Agent-specific fields
     company_name = Column(String(255), nullable=True)  # Required for agents
     pan_number = Column(String(20), nullable=True)     # Required for agents
-    approval_status = Column(Enum(AgentApprovalStatus), nullable=True)
+    approval_status = Column(Enum(AgentApprovalStatus, values_callable=lambda x: [e.value for e in x]), nullable=True)
     
     # Audit fields
     created_at = Column(DateTime(timezone=True), server_default=func.now())
