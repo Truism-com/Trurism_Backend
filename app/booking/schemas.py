@@ -30,9 +30,12 @@ class PassengerSchema(BaseModel):
     type: PassengerType = Field(..., description="Passenger type (ADT, CHD, INF)")
     dob: date = Field(..., description="Passenger date of birth")
     passport_number: Optional[str] = Field(None, min_length=6, max_length=20, description="Passport number for international travel")
-    nationality: Optional[str] = Field(None, min_length=2, max_length=3, description="ISO country code")
+    passport_expirydate: Optional[str] = Field(None, description="Passport expiry date YYYY/MM/DD - required for international")
+    passport_issuing_country_code: Optional[str] = Field(None, min_length=2, max_length=2, description="2-letter ISO country code - required for international")
+    nationality: Optional[str] = Field(None, description="Full nationality e.g. 'Indian' - required for international")
     phone: Optional[str] = Field(None, min_length=10, max_length=20, description="Contact phone number")
     email: Optional[str] = Field(None, description="Contact email address")
+    travel_with: Optional[int] = Field(None, description="For INF only: index of adult this infant travels with (1-based)")
     
     @field_validator('first_name', 'last_name')
     @classmethod
@@ -335,3 +338,21 @@ class CancelBookingResponse(BaseModel):
     refund_processing_time: Optional[str] = Field(None, description="Expected refund processing time")
     cancellation_fee: Optional[float] = Field(None, ge=0, description="Cancellation fee applied")
     message: str = Field(..., description="Cancellation confirmation message")
+
+
+class BookingStatusResponse(BaseModel):
+    """
+    Schema for flight booking status polling.
+
+    Returned by GET /bookings/{id}/status.
+    Frontend polls this after POST /bookings/flights to track PENDING -> CONFIRMED.
+    """
+    booking_id: int = Field(..., description="Booking ID")
+    booking_reference: str = Field(..., description="Booking reference")
+    status: BookingStatus = Field(..., description="Current status")
+    payment_status: PaymentStatus = Field(..., description="Payment status")
+    pnr: Optional[str] = Field(None, description="Airline PNR once confirmed")
+    airiq_booking_id: Optional[str] = Field(None, description="AIR IQ booking ID")
+    confirmation_number: Optional[str] = Field(None, description="Confirmation number")
+
+    model_config = ConfigDict(from_attributes=True)

@@ -23,7 +23,7 @@ from app.booking.schemas import (
     FlightBookingRequest, HotelBookingRequest, BusBookingRequest,
     FlightBookingResponse, HotelBookingResponse, BusBookingResponse,
     BookingListResponse, BookingDetailsResponse, CancelBookingRequest,
-    CancelBookingResponse
+    CancelBookingResponse, BookingStatusResponse
 )
 from app.booking.services import FlightBookingService, HotelBookingService, BusBookingService
 from app.booking.models import BookingStatus
@@ -58,59 +58,31 @@ async def create_flight_booking(
         HTTPException: If booking creation fails or payment fails
     """
     try:
-        from app.search.xml_agency_client import XMLAgencyClient
-        
         flight_data = None
-        search_guid = None
-        
-        # 1. Retrieve the cached search results using the shared Redis pool.
+
+        # Retrieve cached search results
         redis_client = get_redis_client()
-        if redis_client is None:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Search cache is unavailable. Please try again later."
-            )
+        if redis_client is not None:
+            cache_key = f"search:flight:{booking_request.search_id}"
+            try:
+                cached_data_str = await redis_client.get(cache_key)
+                if cached_data_str:
+                    cached_data = json.loads(cached_data_str)
+                    for result in cached_data.get("results", []):
+                        if result.get("offer_id") == booking_request.offer_id:
+                            flight_data = result
+                            break
+            except Exception as redis_err:
+                logging.getLogger(__name__).warning(f"Redis read during booking: {redis_err}")
 
-        cache_key = f"search:flight:{booking_request.search_id}"
-        try:
-            cached_data_str = await redis_client.get(cache_key)
-            if cached_data_str:
-                cached_data = json.loads(cached_data_str)
-                search_guid = cached_data.get("search_guid")
-                # Find specific flight by offer_id
-                for result in cached_data.get("results", []):
-                    if result.get("offer_id") == booking_request.offer_id:
-                        flight_data = result
-                        break
-        except Exception as redis_err:
-            logging.getLogger(__name__).error(f"Redis read error during booking: {redis_err}", exc_info=True)
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Search cache is unavailable. Please try again later."
-            )
+        # flight_data used for isinternational flag in passenger building.
+        # If not in cache, proceed with empty dict - AIR IQ validates the ticket_id directly.
+        if flight_data is None:
+            flight_data = {}
 
-        if not flight_data or not search_guid:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Flight offer has expired or is invalid. Please search again."
-            )
-            
-        # 2. AeroPrebook: Validate the fare is still bookable with the airline
-        xml_client = XMLAgencyClient()
-        is_bookable = await xml_client.prebook_flight(booking_request.offer_id, search_guid)
-        if not is_bookable:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="This flight is no longer available at the quoted price. Please search again."
-            )
-        
         tenant_id = getattr(request.state, "tenant_id", None)
         booking_service = FlightBookingService(db, tenant_id=tenant_id)
-        
-        # Pass the search_guid into the booking service so it can be saved for AeroBook phase
-        flight_data["search_guid"] = search_guid
-        
-        # Track who created this booking (for B2B agent tracking)
+
         booking = await booking_service.create_flight_booking(
             current_user, booking_request, flight_data, created_by_user=current_user
         )
@@ -610,4 +582,50 @@ async def cancel_booking(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to cancel booking: {str(e)}"
+        )
+
+
+@router.get("/flights/{booking_id}/status", response_model=BookingStatusResponse)
+async def get_flight_booking_status(
+    booking_id: int,
+    current_user: User = Depends(get_current_user),
+    request: Request = None,
+    db: AsyncSession = Depends(get_database_session)
+):
+    """
+    Get current status of a flight booking.
+
+    Poll this after POST /bookings/flights to track when status
+    moves from pending to confirmed or ticketing_failed.
+    Returns pnr and airiq_booking_id once confirmed.
+    """
+    from sqlalchemy import select
+    from app.booking.models import FlightBooking
+
+    tenant_id = getattr(request.state, "tenant_id", None)
+    try:
+        query = select(FlightBooking).where(
+            FlightBooking.id == booking_id,
+            FlightBooking.user_id == current_user.id,
+        )
+        if tenant_id:
+            query = query.where(FlightBooking.tenant_id == tenant_id)
+
+        result = await db.execute(query)
+        booking = result.scalar_one_or_none()
+
+        if not booking:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Flight booking not found"
+            )
+
+        return BookingStatusResponse.model_validate(booking)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve booking status: {str(e)}"
         )
