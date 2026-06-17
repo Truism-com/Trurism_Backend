@@ -2,11 +2,10 @@
 Search Services
 
 This module contains business logic for search operations:
-- Flight search with external API integration
+- Flight search with AIR IQ REST API integration
 - Hotel search with filtering and caching
 - Bus search functionality
 - Search result caching and optimization
-- Mock data generation for development
 """
 
 import asyncio
@@ -128,8 +127,8 @@ class FlightSearchService(BaseSearchService):
                 expires_at=datetime.fromisoformat(cached_results["cached_at"]) + timedelta(seconds=settings.search_cache_ttl)
             )
         
-        # Perform search using the real XML.Agency SOAP client
-        flight_results, search_guid = await self._search_flights_xml_agency(search_request)
+        # Perform search using AIR IQ REST client
+        flight_results, _ = await self._search_flights_airiq(search_request)
         
         # Apply markups per result
         for result in flight_results:
@@ -157,16 +156,20 @@ class FlightSearchService(BaseSearchService):
             cached=False
         )
     
-    async def _search_flights_xml_agency(self, search_request: FlightSearchRequest) -> Tuple[List[FlightResult], str]:
-        """Search flights using XML.Agency API (SOAP 1.2)."""
-        from app.search.xml_agency_client import XMLAgencyClient
-        
-        client = XMLAgencyClient()
-        results, search_guid = await client.search_flights(search_request)
-        
-        # We cap results at max_results and sort by cheapest
+    async def _search_flights_airiq(
+        self, search_request: FlightSearchRequest
+    ) -> Tuple[List[FlightResult], str]:
+        """Search flights using AIR IQ REST API."""
+        from app.search.airiq_client import AirIQClient
+
+        client = AirIQClient()
+        try:
+            results, search_id = await client.search_flights(search_request)
+        finally:
+            await client.close()
+
         results.sort(key=lambda x: x.price)
-        return results[:search_request.max_results], search_guid
+        return results[:search_request.max_results], search_id
 
 
 class HotelSearchService(BaseSearchService):

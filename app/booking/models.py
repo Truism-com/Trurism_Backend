@@ -147,7 +147,7 @@ class FlightBooking(Base, TenantMixin):
     departure_time = Column(DateTime(timezone=True), nullable=False)
     arrival_time = Column(DateTime(timezone=True), nullable=False)
     travel_class = Column(String(20), nullable=False)
-    search_guid = Column(String(100), nullable=True)  # Store XML.Agency SearchGuid for AeroBook phase
+    search_guid = Column(String(100), nullable=True)  # Reserved for future use
     
     # Passenger information
     passenger_count = Column(Integer, nullable=False)
@@ -164,7 +164,9 @@ class FlightBooking(Base, TenantMixin):
     # Booking status
     status = Column(Enum(BookingStatus), default=BookingStatus.PENDING)
     confirmation_number = Column(String(50), nullable=True)  # From airline
-    pnr = Column(String(10), nullable=True)  # Passenger Name Record
+    pnr = Column(String(10), nullable=True)  # Passenger Name Record from airline
+    airiq_booking_id = Column(String(100), nullable=True)  # AIR IQ booking_id from POST /book
+    celery_task_id = Column(String(100), nullable=True)  # Celery task ID for async ticket issuance
     
     # Additional information
     special_requests = Column(Text, nullable=True)

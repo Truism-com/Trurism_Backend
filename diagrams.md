@@ -306,3 +306,42 @@ on push to main:
 Existing Dockerfile is functional. `start.sh` runs `alembic upgrade head` then `uvicorn`. Good pattern.
 
 ---
+
+
+                          INTERNET
+                             |
+              +--------------+--------------+
+              |                             |
+     [Vercel / CDN]                  [Cloudflare DNS]
+     Next.js Frontend             (subdomain routing per tenant)
+              |
+              | REST + JWT
+              |
+    +---------+----------+
+    |   API Gateway /    |
+    |   Nginx Reverse    |
+    |   Proxy (free)     |
+    +---------+----------+
+              |
+    +---------+--------------------+
+    |         FastAPI Backend       |
+    |  (Render free tier / Azure)   |
+    |  - 20 modules                 |
+    |  - SlowAPI rate limiter       |
+    |  - TenantMiddleware           |
+    +---------+--------------------+
+              |           |           |
+    +---------+   +-------+--+   +---+------+
+    | PostgreSQL |  |  Redis   |  |  Celery  |
+    | (Supabase  |  | (Upstash |  | Worker   |
+    |  free)     |  |  free)   |  | (Render) |
+    +------------+  +----------+  +----------+
+                                        |
+                              +---------+---------+
+                              |  External APIs     |
+                              |  - AIR IQ (real)   |
+                              |  - XML.Agency SOAP  |
+                              |  - Razorpay        |
+                              |  - SMTP (Gmail)    |
+                              +--------------------+
+

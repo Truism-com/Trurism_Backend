@@ -164,33 +164,131 @@ class FlightBookingService(BaseBookingService):
             # Update booking based on payment result
             if payment_result['status'] == PaymentStatus.SUCCESS:
                 flight_booking.payment_status = PaymentStatus.SUCCESS
-                flight_booking.status = BookingStatus.CONFIRMED
                 flight_booking.confirmation_number = f"FL{flight_booking.id:06d}"
-                flight_booking.pnr = f"PNR{flight_booking.id:06d}"
             else:
                 flight_booking.payment_status = PaymentStatus.FAILED
                 flight_booking.status = BookingStatus.PENDING
-            
+
             await self.db.commit()
             await self.db.refresh(flight_booking)
 
-            if flight_booking.status == BookingStatus.CONFIRMED:
+            # Issue ticket synchronously via AIR IQ after payment captured
+            if payment_result['status'] == PaymentStatus.SUCCESS:
+                # Build passenger lists in AIR IQ format
+                adult_info = []
+                child_info = []
+                infant_info = []
+                for p in booking_request.passengers:
+                    p_dict = p.model_dump()
+                    pax_type = p_dict.get("type", "ADT")
+                    base = {
+                        "title": p_dict.get("title", "Mr."),
+                        "first_name": p_dict.get("first_name", ""),
+                        "last_name": p_dict.get("last_name", ""),
+                    }
+                    dob = p_dict.get("dob")
+                    if dob:
+                        if hasattr(dob, "strftime"):
+                            base["dob"] = dob.strftime("%Y/%m/%d")
+                        else:
+                            base["dob"] = str(dob).replace("-", "/")
+                    # International passport fields
+                    if flight_data.get("isinternational"):
+                        for field in ("passport_number", "passport_expirydate",
+                                      "passport_issuing_country_code", "nationality"):
+                            if p_dict.get(field):
+                                base[field] = p_dict[field]
+                    if pax_type == "ADT":
+                        adult_info.append(base)
+                    elif pax_type == "CHD":
+                        child_info.append(base)
+                    elif pax_type == "INF":
+                        base["travel_with"] = p_dict.get("travel_with", 1)
+                        infant_info.append(base)
+
+                from app.search.airiq_client import AirIQClient
+                airiq = AirIQClient()
                 try:
-                    from app.services.email import email_service
-                    await email_service.send_booking_confirmation(
-                        to_email=user.email,
-                        booking_reference=booking_reference,
-                        service_type="Flight",
-                        travel_date=str(flight_booking.departure_time.date()),
-                        amount=flight_booking.total_amount,
-                        passenger_name=user.name,
+                    airiq_result = await airiq.book_ticket(
+                        ticket_id=booking_request.offer_id,
+                        adult_info=adult_info,
+                        child_info=child_info,
+                        infant_info=infant_info,
                     )
-                    
-                    logger.info(f"Booking confirmation email sent to {user.email} for {booking_reference}") 
-                except Exception as email_err:
-                    logger.warning(f"Flight booking email failed: {email_err}")    
-            
+                finally:
+                    await airiq.close()
+
+                if airiq_result.get("success"):
+                    airiq_booking_id = airiq_result.get("booking_id", "")
+
+                    # Fetch real PNR
+                    pnr = ""
+                    try:
+                        airiq_detail = AirIQClient()
+                        try:
+                            details = await airiq_detail.get_ticket_details(airiq_booking_id)
+                            pnr = details.get("pnr", "")
+                        finally:
+                            await airiq_detail.close()
+                    except Exception as pnr_err:
+                        logger.warning("PNR fetch failed: %s", pnr_err)
+
+                    flight_booking.status = BookingStatus.CONFIRMED
+                    flight_booking.airiq_booking_id = airiq_booking_id
+                    flight_booking.confirmation_number = airiq_booking_id
+                    flight_booking.pnr = pnr or airiq_booking_id
+                    await self.db.commit()
+                    await self.db.refresh(flight_booking)
+                    logger.info(
+                        "Ticket issued. booking_id=%s airiq_booking_id=%s pnr=%s",
+                        flight_booking.id, airiq_booking_id, pnr
+                    )
+
+                    try:
+                        from app.services.email import email_service
+                        await email_service.send_booking_confirmation(
+                            to_email=user.email,
+                            booking_reference=booking_reference,
+                            service_type="Flight",
+                            travel_date=str(flight_booking.departure_time.date()),
+                            amount=float(flight_booking.total_amount),
+                            passenger_name=user.name,
+                        )
+                    except Exception as email_err:
+                        logger.warning("Confirmation email failed: %s", email_err)
+
+                else:
+                    error = airiq_result.get("error", "AIR IQ booking failed")
+                    logger.error(
+                        "Ticket issuance failed. booking_id=%s error=%s",
+                        flight_booking.id, error
+                    )
+                    flight_booking.status = BookingStatus.TICKETING_FAILED
+                    await self.db.commit()
+
+                    # Refund wallet if payment was wallet
+                    if payment_mode.value == "wallet":
+                        try:
+                            await self.payment_processor.process_refund(
+                                user_id=user.id,
+                                amount=total_amount,
+                                booking_id=flight_booking.id,
+                                booking_type="flight",
+                                original_payment_method=payment_mode.value,
+                                reason=f"Ticket issuance failed: {error}",
+                            )
+                            flight_booking.payment_status = PaymentStatus.REFUNDED
+                            await self.db.commit()
+                        except Exception as refund_err:
+                            logger.error(
+                                "Refund failed for booking_id=%s: %s",
+                                flight_booking.id, refund_err
+                            )
+
+                    await self.db.refresh(flight_booking)
+
             return flight_booking
+
             
         except HTTPException:
             await self.db.rollback()

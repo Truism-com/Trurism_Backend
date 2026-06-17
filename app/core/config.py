@@ -114,16 +114,25 @@ class Settings(BaseSettings):
     # Security Settings
     bcrypt_rounds: int = 12
     
-    # External API Settings - XML.Agency (Flights)
+    # External API Settings - XML.Agency (Flights) - DEPRECATED, kept for reference
     xml_agency_base_url: str = "https://api.xmlagency.com"
     xml_agency_username: str = ""
     xml_agency_password: str = ""
     xml_agency_timeout: int = 30
-    
-    # Flight API Settings (Generic)
-    flight_api_url: str = ""
-    flight_api_key: str = ""
-    flight_api_secret: str = ""
+
+    # AIR IQ REST API Settings (active flight integration)
+    # Maps to FLIGHT_URL, FLIGHT_LOGIN_ID, FLIGHT_PASSWORD, FLIGHT_API_KEY in .env
+    flight_url: str = ""           # Full login URL, e.g. https://omairiq.azurewebsites.net/login
+    flight_login_id: str = ""      # AIR IQ username
+    flight_password: str = ""      # AIR IQ password
+    flight_api_key: str = ""       # AIR IQ api-key header value
+
+    @property
+    def airiq_base_url(self) -> str:
+        """Derive base URL from login URL by stripping /login path."""
+        if self.flight_url:
+            return self.flight_url.rstrip("/").removesuffix("/login")
+        return ""
     
     # Bus API Settings
     bus_api_url: str = ""

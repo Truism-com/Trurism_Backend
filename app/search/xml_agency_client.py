@@ -1,8 +1,14 @@
+# DEPRECATED: XML.Agency SOAP client is no longer the primary flight integration.
+# AIR IQ REST client (app/search/airiq_client.py) is the active integration.
+# This file is kept as fallback only. Do not use in new code.
+# To re-enable: un-comment in services.py and swap _search_flights_airiq back.
 """
 XML.Agency Flight API Integration (SOAP 1.2)
 
 Client for AeroSearch, AeroPrebook, AeroBook endpoints per v3.17 spec.
 Uses zeep with SqliteCache to avoid repeated WSDL download latency.
+
+DEPRECATED - kept as fallback. See airiq_client.py for active integration.
 """
 
 import logging
