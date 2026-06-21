@@ -262,6 +262,16 @@ class AirIQClient:
             response.raise_for_status()
             payload = response.json()
 
+            logger.info(
+                "AIR IQ search raw response: keys=%s code=%s status=%s data_type=%s data_len=%s first_item_keys=%s",
+                list(payload.keys()),
+                payload.get("code"),
+                payload.get("status"),
+                type(payload.get("data")).__name__,
+                len(payload.get("data") or []) if isinstance(payload.get("data"), (list, dict)) else "N/A",
+                list(payload["data"][0].keys()) if isinstance(payload.get("data"), list) and payload["data"] else "empty",
+            )
+
             if str(payload.get("code", "")) != "200" or payload.get("status") != "success":
                 logger.error(
                     "AIR IQ search non-success response: code=%s message=%s",
@@ -272,6 +282,11 @@ class AirIQClient:
 
             raw_results = payload.get("data", []) or []
             results = self._parse_search_response(raw_results, request)
+            logger.info(
+                "AIR IQ search parsed: raw_count=%s parsed_count=%s",
+                len(raw_results),
+                len(results),
+            )
             return results, ""
 
         except httpx.HTTPStatusError as e:
