@@ -262,9 +262,11 @@ class AirIQClient:
             response.raise_for_status()
             payload = response.json()
 
-            if payload.get("code") != "200" or payload.get("status") != "success":
+            if str(payload.get("code", "")) != "200" or payload.get("status") != "success":
                 logger.error(
-                    "AIR IQ search non-success response: %s", payload.get("message", "")
+                    "AIR IQ search non-success response: code=%s message=%s",
+                    payload.get("code"),
+                    payload.get("message", ""),
                 )
                 return [], ""
 
@@ -293,6 +295,13 @@ class AirIQClient:
                 )
                 response.raise_for_status()
                 payload = response.json()
+                if str(payload.get("code", "")) != "200" or payload.get("status") != "success":
+                    logger.error(
+                        "AIR IQ search retry non-success: code=%s message=%s",
+                        payload.get("code"),
+                        payload.get("message", ""),
+                    )
+                    return [], ""
                 raw_results = payload.get("data", []) or []
                 results = self._parse_search_response(raw_results, request)
                 return results, ""
