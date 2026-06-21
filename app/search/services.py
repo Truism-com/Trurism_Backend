@@ -140,7 +140,7 @@ class FlightSearchService(BaseSearchService):
         
         # Prepare response
         response_data = {
-            "search_guid": search_guid,
+            "search_id": search_id,
             "total_results": len(flight_results),
             "results": [result.model_dump() for result in flight_results]
         }
