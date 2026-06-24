@@ -2,12 +2,9 @@
 set -e
 
 # Azure App Service startup script
-# This script handles the virtual environment activation and starts the application
-
 echo "Starting Travel Booking Platform on Azure..."
 
 # Oryx builds antenv at a hashed path under /tmp, not /antenv
-# Activate whichever virtualenv Oryx created, then hand off to gunicorn
 ORYX_ENV=$(find /tmp -maxdepth 3 -name activate -path "*/antenv/*" 2>/dev/null | head -1)
 if [ -n "$ORYX_ENV" ]; then
     echo "Activating Oryx virtualenv: $ORYX_ENV"
@@ -23,10 +20,18 @@ if ! command -v python &> /dev/null; then
 fi
 
 echo "Python version: $(python --version)"
+
+# Run database migrations before starting the app
+echo "$(date) - Running database migrations..."
+python -m alembic upgrade head
+echo "$(date) - Database migrations completed successfully"
+
+# Skip in-app migration to avoid double execution
+export SKIP_DB_INIT=true
+
 echo "Starting Gunicorn server..."
 
 # Start Gunicorn with Uvicorn workers
-# Settings optimized for Azure App Service
 exec gunicorn app.main:app \
   --workers 2 \
   --worker-class uvicorn.workers.UvicornWorker \

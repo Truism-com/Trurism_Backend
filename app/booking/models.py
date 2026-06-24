@@ -9,7 +9,7 @@ This module defines the database models for booking operations:
 - Payment and transaction models
 """
 
-from sqlalchemy import Column, Integer, String, DateTime, Boolean, Text, Numeric, JSON, ForeignKey, Enum, UniqueConstraint
+from sqlalchemy import Column, Integer, String, DateTime, Boolean, Text, Numeric, JSON, ForeignKey, Enum, UniqueConstraint, Index
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 import enum
@@ -124,12 +124,13 @@ class FlightBooking(Base, TenantMixin):
     __tablename__ = "flight_bookings"
     __table_args__ = (
         UniqueConstraint('booking_reference', 'tenant_id', name='uq_flight_booking_ref_tenant'),
+        Index('ix_flight_bookings_tenant_id', 'tenant_id'),
     )
-    
+
     # Primary identification
     id = Column(Integer, primary_key=True, index=True)
     booking_reference = Column(String(20), index=True, nullable=False)
-    
+
     # User relationship
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     user = relationship("User", back_populates="flight_bookings", foreign_keys=[user_id])
@@ -192,6 +193,7 @@ class HotelBooking(Base, TenantMixin):
     __tablename__ = "hotel_bookings"
     __table_args__ = (
         UniqueConstraint('booking_reference', 'tenant_id', name='uq_hotel_booking_ref_tenant'),
+        Index('ix_hotel_bookings_tenant_id', 'tenant_id'),
     )
     
     # Primary identification
@@ -258,6 +260,7 @@ class BusBooking(Base, TenantMixin):
     __tablename__ = "bus_bookings"
     __table_args__ = (
         UniqueConstraint('booking_reference', 'tenant_id', name='uq_bus_booking_ref_tenant'),
+        Index('ix_bus_bookings_tenant_id', 'tenant_id'),
     )
     
     # Primary identification

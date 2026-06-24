@@ -14,17 +14,18 @@ from sqlalchemy.orm import declared_attr
 class TenantMixin:
     """
     Mixin to add tenant isolation to models.
-    
-    Adds a mandatory tenant_id column and an index for performance.
+
+    Adds a tenant_id column and an index on it.  Models that define
+    their own ``__table_args__`` override the mixin's version, so they
+    must include ``Index('ix_{table}_tenant_id', 'tenant_id')`` manually.
     """
-    
+
     @declared_attr
     def tenant_id(cls):
         return Column(Integer, ForeignKey("tenants.id"), nullable=True)
 
     @declared_attr
     def __table_args__(cls):
-        # Ensure we always have an index on tenant_id for faster lookups
         return (
             Index(f"ix_{cls.__tablename__}_tenant_id", "tenant_id"),
         )

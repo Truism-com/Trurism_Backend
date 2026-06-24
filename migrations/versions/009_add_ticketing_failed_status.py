@@ -16,9 +16,8 @@ depends_on = None
 
 
 def upgrade() -> None:
-    # PostgreSQL requires ALTER TYPE to add a new enum value.
-    # The IF NOT EXISTS clause is supported in Postgres 9.6+.
-    op.execute("ALTER TYPE bookingstatus ADD VALUE IF NOT EXISTS 'ticketing_failed'")
+    with op.get_context().autocommit_block():
+        op.execute("ALTER TYPE bookingstatus ADD VALUE IF NOT EXISTS 'ticketing_failed'")
 
 
 def downgrade() -> None:

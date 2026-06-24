@@ -106,17 +106,17 @@ class Wallet(Base, TenantMixin):
     topup_requests: Mapped[List["WalletTopupRequest"]] = relationship("WalletTopupRequest", back_populates="wallet")
     
     @property
-    def available_balance(self) -> float:
+    def available_balance(self) -> Decimal:
         """Get available balance (balance - hold_amount)."""
-        return float(self.balance) - float(self.hold_amount)
-    
+        return self.balance - self.hold_amount
+
     @property
-    def available_credit(self) -> float:
+    def available_credit(self) -> Decimal:
         """Get available credit limit."""
-        return max(0.0, float(self.credit_limit) - float(self.credit_used))
-    
+        return max(Decimal("0.00"), self.credit_limit - self.credit_used)
+
     @property
-    def total_available(self) -> float:
+    def total_available(self) -> Decimal:
         """Get total available amount (balance + available credit)."""
         return self.available_balance + self.available_credit
     

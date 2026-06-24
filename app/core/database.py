@@ -152,35 +152,38 @@ async def seed_database():
     """
     Seed the database with default superadmin.
     """
+    import os
     from app.auth.models import User, UserRole
     from app.core.security import SecurityManager
     from sqlalchemy import select
-    
+
     # Import other models so SQLAlchemy relationships resolve correctly
     import app.booking.models  # noqa: F401
-    
+
+    seed_email = os.getenv("SEED_ADMIN_EMAIL", "admin@demo.com")
+    seed_password = os.getenv("SEED_ADMIN_PASSWORD", "admin123")
+
     async with AsyncSessionLocal() as db:
         try:
-            # Check if admin already exists
             result = await db.execute(
-                select(User).where(User.email == "admin@demo.com")
+                select(User).where(User.email == seed_email)
             )
             existing = result.scalar_one_or_none()
             if existing:
-                logging.info("admin@demo.com already exists, skipping seeding.")
+                logging.info(f"{seed_email} already exists, skipping seeding.")
                 return
-            
+
             user = User(
-                email="admin@demo.com",
-                password_hash=SecurityManager.hash_password("admin123"),
-                name="Demo Admin",
+                email=seed_email,
+                password_hash=SecurityManager.hash_password(seed_password),
+                name="Admin",
                 role=UserRole.SUPERADMIN,
                 is_active=True,
                 is_verified=True,
             )
             db.add(user)
             await db.commit()
-            logging.info("Seeded admin@demo.com / admin123 (SUPERADMIN)")
+            logging.info(f"Seeded {seed_email} (SUPERADMIN)")
         except Exception as e:
             logging.error(f"Failed to seed database: {e}")
 

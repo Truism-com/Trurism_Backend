@@ -420,11 +420,14 @@ async def root():
     }
 
 
-@app.get("/debug/run-migrations", tags=["Debug"])
-async def debug_run_migrations(reset: bool = False):
+@app.get("/debug/run-migrations", tags=["Debug"], include_in_schema=False)
+async def debug_run_migrations(
+    reset: bool = False,
+    credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer()),
+):
     """
     Run migrations and seed the database.
-    Only available in development environment.
+    Only available in development environment. Requires admin auth.
     Pass reset=true to drop and recreate the public schema first.
     """
     if settings.environment != "development":
@@ -432,6 +435,10 @@ async def debug_run_migrations(reset: bool = False):
             status_code=403,
             content={"detail": "Only allowed in development mode"}
         )
+    from app.core.security import SecurityManager
+    payload = await SecurityManager.verify_token(credentials.credentials, "access")
+    if payload.get("role") not in ("admin", "superadmin"):
+        return JSONResponse(status_code=403, content={"detail": "Admin access required"})
     try:
         if reset:
             from sqlalchemy import text
@@ -471,17 +478,23 @@ async def debug_run_migrations(reset: bool = False):
         )
 
 
-@app.get("/debug/kill-connections", tags=["Debug"])
-async def debug_kill_connections():
+@app.get("/debug/kill-connections", tags=["Debug"], include_in_schema=False)
+async def debug_kill_connections(
+    credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer()),
+):
     """
     Kill all other active database connections to release locks.
-    Only available in development environment.
+    Only available in development environment. Requires admin auth.
     """
     if settings.environment != "development":
         return JSONResponse(
             status_code=403,
             content={"detail": "Only allowed in development mode"}
         )
+    from app.core.security import SecurityManager
+    payload = await SecurityManager.verify_token(credentials.credentials, "access")
+    if payload.get("role") not in ("admin", "superadmin"):
+        return JSONResponse(status_code=403, content={"detail": "Admin access required"})
     from sqlalchemy import text
     from app.core.database import engine
     try:
@@ -495,17 +508,23 @@ async def debug_kill_connections():
         )
 
 
-@app.get("/debug/test-refresh", tags=["Debug"])
-async def debug_test_refresh():
+@app.get("/debug/test-refresh", tags=["Debug"], include_in_schema=False)
+async def debug_test_refresh(
+    credentials: HTTPAuthorizationCredentials = Depends(HTTPBearer()),
+):
     """
     Test refresh token validation and return diagnostic information.
-    Only available in development environment.
+    Only available in development environment. Requires admin auth.
     """
     if settings.environment != "development":
         return JSONResponse(
             status_code=403,
             content={"detail": "Only allowed in development mode"}
         )
+    from app.core.security import SecurityManager
+    payload = await SecurityManager.verify_token(credentials.credentials, "access")
+    if payload.get("role") not in ("admin", "superadmin"):
+        return JSONResponse(status_code=403, content={"detail": "Admin access required"})
     from app.core.security import SecurityManager
     try:
         payload = await SecurityManager.verify_token("dummy", "refresh")
