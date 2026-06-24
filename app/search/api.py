@@ -27,6 +27,65 @@ from app.search.services import FlightSearchService, HotelSearchService, BusSear
 router = APIRouter(prefix="/search", tags=["Search"])
 
 
+@router.get("/debug-airiq")
+async def debug_airiq(
+    origin: str = "DEL",
+    destination: str = "BOM",
+    depart_date: str = "2026-08-01",
+):
+    """
+    Debug endpoint to call AIR IQ directly and return its raw response.
+    """
+    from app.search.airiq_client import AirIQClient
+    from datetime import datetime
+    client = AirIQClient()
+    try:
+        token = await client.get_token()
+        base_url = client.base_url
+        headers = client._auth_headers(token)
+        
+        # Test 1: Sectors
+        sectors_res = await client._http.get(f"{base_url}/sectors", headers=headers)
+        sectors_json = sectors_res.json() if sectors_res.status_code == 200 else sectors_res.text
+        
+        # Test 2: Availability
+        avail_res = await client._http.post(
+            f"{base_url}/availability",
+            headers=headers,
+            json={"origin": origin.upper(), "destination": destination.upper()}
+        )
+        avail_json = avail_res.json() if avail_res.status_code == 200 else avail_res.text
+        
+        # Test 3: Search
+        depart_date_obj = datetime.strptime(depart_date, "%Y-%m-%d").date()
+        body = {
+            "origin": origin.upper(),
+            "destination": destination.upper(),
+            "departure_date": depart_date_obj.strftime("%Y/%m/%d"),
+            "adult": 1,
+            "child": 0,
+            "infant": 0
+        }
+        search_res = await client._http.post(
+            f"{base_url}/search",
+            headers=headers,
+            json=body
+        )
+        search_json = search_res.json() if search_res.status_code == 200 else search_res.text
+        
+        return {
+            "token_preview": token[:15] + "..." if token else None,
+            "base_url": base_url,
+            "sectors": sectors_json,
+            "availability": avail_json,
+            "search": search_json
+        }
+    except Exception as e:
+        return {"error": str(e)}
+    finally:
+        await client.close()
+
+
 @router.get("/flights", response_model=SearchResponse)
 async def search_flights(
     origin: str = Query(..., min_length=3, max_length=3, description="Origin airport IATA code"),
