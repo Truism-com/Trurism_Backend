@@ -70,12 +70,13 @@ class BaseSearchService:
         return None
     
     async def _cache_results(self, cache_key: str, results: Dict[str, Any], ttl: int):
-        """Cache search results with TTL."""
+        """Cache search results with TTL. Empty results use a short TTL to avoid blocking."""
         if not self.redis or not results:
             return
         try:
+            actual_ttl = ttl if results.get("total_results", 0) > 0 else 60
             results["cached_at"] = datetime.now(timezone.utc).isoformat()
-            await self.redis.setex(cache_key, ttl, json.dumps(results))
+            await self.redis.setex(cache_key, actual_ttl, json.dumps(results))
         except Exception as e:
             logger.error(f"Cache write error: {e}")
     
@@ -105,49 +106,43 @@ class FlightSearchService(BaseSearchService):
     Flight search service for finding available flights.
     """
     
-    async def search_flights(self, search_request: FlightSearchRequest) -> SearchResponse:
+    async def search_flights(self, search_request: FlightSearchRequest, no_cache: bool = False) -> SearchResponse:
         """
         Search for available flights.
         """
         start_time = datetime.now(timezone.utc)
-        # Generate cache key
         cache_key = self._get_cache_key("flight", search_request.model_dump())
         search_id = cache_key.replace("search:flight:", "")
-        
-        
-        # Try to get cached results
-        cached_results = await self._get_cached_results(cache_key)
-        if cached_results:
-            return SearchResponse(
-                search_id=search_id,
-                total_results=cached_results["total_results"],
-                results=cached_results["results"],
-                search_time=self._calculate_search_time(start_time),
-                cached=True,
-                expires_at=datetime.fromisoformat(cached_results["cached_at"]) + timedelta(seconds=settings.search_cache_ttl)
-            )
-        
-        # Perform search using AIR IQ REST client
+
+        if not no_cache:
+            cached_results = await self._get_cached_results(cache_key)
+            if cached_results:
+                return SearchResponse(
+                    search_id=search_id,
+                    total_results=cached_results["total_results"],
+                    results=cached_results["results"],
+                    search_time=self._calculate_search_time(start_time),
+                    cached=True,
+                    expires_at=datetime.fromisoformat(cached_results["cached_at"]) + timedelta(seconds=settings.search_cache_ttl)
+                )
+
         flight_results, _ = await self._search_flights_airiq(search_request)
-        
-        # Apply markups per result
+
         for result in flight_results:
             result.price = await self._apply_markup(
-                ServiceType.FLIGHT, 
-                result.price, 
+                ServiceType.FLIGHT,
+                result.price,
                 {"airline": result.airline, "origin": result.origin, "destination": result.destination}
             )
-        
-        # Prepare response
+
         response_data = {
             "search_id": search_id,
             "total_results": len(flight_results),
             "results": [result.model_dump() for result in flight_results]
         }
-        
-        # Cache results
+
         await self._cache_results(cache_key, response_data, settings.search_cache_ttl)
-        
+
         return SearchResponse(
             search_id=search_id,
             total_results=len(flight_results),

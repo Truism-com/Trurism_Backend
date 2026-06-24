@@ -73,12 +73,22 @@ async def debug_airiq(
         )
         search_json = search_res.json() if search_res.status_code == 200 else search_res.text
         
+        date_in_avail = None
+        if isinstance(avail_json, dict) and isinstance(avail_json.get("data"), list):
+            date_in_avail = depart_date in [
+                d.strip() for d in avail_json["data"]
+            ]
+
         return {
+            "route": f"{origin.upper()}→{destination.upper()}",
+            "depart_date": depart_date,
             "token_preview": token[:15] + "..." if token else None,
             "base_url": base_url,
+            "search_body_sent": body,
+            "date_in_availability": date_in_avail,
             "sectors": sectors_json,
             "availability": avail_json,
-            "search": search_json
+            "search": search_json,
         }
     except Exception as e:
         return {"error": str(e)}
@@ -97,6 +107,7 @@ async def search_flights(
     infants: int = Query(0, ge=0, le=9, description="Number of infant passengers"),
     travel_class: str = Query("economy", description="Travel class (economy, business, first)"),
     max_results: int = Query(50, ge=1, le=100, description="Maximum search results"),
+    no_cache: bool = Query(False, description="Bypass cache and force fresh search"),
     request: Request = None,
     db: AsyncSession = Depends(get_database_session)
 ):
@@ -105,13 +116,13 @@ async def search_flights(
     """
     try:
         from datetime import datetime
-        
+
         # Parse dates
         depart_date_obj = datetime.strptime(depart_date, "%Y-%m-%d").date()
         return_date_obj = None
         if return_date:
             return_date_obj = datetime.strptime(return_date, "%Y-%m-%d").date()
-        
+
         # Create search request
         search_request = FlightSearchRequest(
             origin=origin.upper(),
@@ -124,12 +135,12 @@ async def search_flights(
             travel_class=travel_class,
             max_results=max_results
         )
-        
+
         # Perform search
         tenant_id = getattr(request.state, "tenant_id", None)
         flight_service = FlightSearchService(db, tenant_id=tenant_id)
-        results = await flight_service.search_flights(search_request)
-        
+        results = await flight_service.search_flights(search_request, no_cache=no_cache)
+
         return results
         
     except ValueError as e:
@@ -148,26 +159,17 @@ async def search_flights(
 @router.post("/flights", response_model=SearchResponse)
 async def search_flights_post(
     search_request: FlightSearchRequest,
+    no_cache: bool = Query(False, description="Bypass cache and force fresh search"),
     request: Request = None,
     db: AsyncSession = Depends(get_database_session)
 ):
     """
     Search for flights using POST method with request body.
-    
-    This endpoint provides an alternative to GET method for complex search
-    parameters that might be too long for URL parameters.
-    
-    Args:
-        search_request: Flight search parameters in request body
-        db: Database session
-        
-    Returns:
-        SearchResponse: Flight search results with metadata
     """
     try:
         tenant_id = getattr(request.state, "tenant_id", None)
         flight_service = FlightSearchService(db, tenant_id=tenant_id)
-        results = await flight_service.search_flights(search_request)
+        results = await flight_service.search_flights(search_request, no_cache=no_cache)
         return results
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))

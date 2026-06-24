@@ -230,6 +230,15 @@ class AirIQClient:
         response.raise_for_status()
         return response.json().get("data", [])
 
+    def _normalize_availability_date(self, date_str: str) -> Optional[str]:
+        """Parse AIR IQ availability date strings into YYYY-MM-DD for comparison."""
+        for fmt in ("%d-%b-%Y", "%Y-%m-%d", "%Y/%m/%d", "%d/%m/%Y"):
+            try:
+                return datetime.strptime(date_str.strip(), fmt).strftime("%Y-%m-%d")
+            except (ValueError, AttributeError):
+                continue
+        return None
+
     async def search_flights(
         self, request: FlightSearchRequest
     ) -> Tuple[List[FlightResult], str]:
@@ -242,9 +251,26 @@ class AirIQClient:
         AIR IQ date format: YYYY/MM/DD
         AIR IQ typo in response: 'arival_time' and 'arival_date' (single 'r').
         """
+        origin = request.origin.upper()
+        destination = request.destination.upper()
+        target_date = request.depart_date.strftime("%Y-%m-%d")
+
+        try:
+            avail_dates = await self.get_availability(origin, destination)
+            normalized = [self._normalize_availability_date(d) for d in avail_dates]
+            normalized = [d for d in normalized if d]
+            if normalized and target_date not in normalized:
+                logger.warning(
+                    "AIR IQ: date %s not in availability for %s→%s (available: %s..%s)",
+                    target_date, origin, destination,
+                    min(normalized), max(normalized),
+                )
+        except Exception as e:
+            logger.warning("AIR IQ availability pre-check failed (proceeding with search): %s", e)
+
         body: Dict[str, Any] = {
-            "origin": request.origin.upper(),
-            "destination": request.destination.upper(),
+            "origin": origin,
+            "destination": destination,
             "departure_date": request.depart_date.strftime("%Y/%m/%d"),
             "adult": request.adults,
             "child": request.children or 0,
@@ -262,19 +288,18 @@ class AirIQClient:
             payload = response.json()
 
             logger.info(
-                "AIR IQ search raw response: keys=%s code=%s status=%s data_type=%s data_len=%s first_item_keys=%s",
-                list(payload.keys()),
+                "AIR IQ search response: code=%s status=%s message=%s data_len=%s route=%s→%s date=%s",
                 payload.get("code"),
                 payload.get("status"),
-                type(payload.get("data")).__name__,
-                len(payload.get("data") or []) if isinstance(payload.get("data"), (list, dict)) else "N/A",
-                list(payload["data"][0].keys()) if isinstance(payload.get("data"), list) and payload["data"] else "empty",
+                payload.get("message", ""),
+                len(payload.get("data") or []) if isinstance(payload.get("data"), list) else "N/A",
+                origin, destination, target_date,
             )
 
             if str(payload.get("code", "")) != "200" or payload.get("status") != "success":
-                logger.error(
-                    "AIR IQ search non-success response: code=%s message=%s",
-                    payload.get("code"),
+                logger.warning(
+                    "AIR IQ search: no flights for %s→%s on %s (message=%s)",
+                    origin, destination, target_date,
                     payload.get("message", ""),
                 )
                 return [], ""
@@ -282,14 +307,12 @@ class AirIQClient:
             raw_results = payload.get("data", []) or []
             results = self._parse_search_response(raw_results, request)
             logger.info(
-                "AIR IQ search parsed: raw_count=%s parsed_count=%s",
-                len(raw_results),
-                len(results),
+                "AIR IQ search parsed: raw=%d parsed=%d route=%s→%s",
+                len(raw_results), len(results), origin, destination,
             )
             return results, ""
 
         except httpx.HTTPStatusError as e:
-            # Token may have expired on the server side before our cache TTL
             if e.response.status_code == 401:
                 logger.warning("AIR IQ 401 on search - clearing token cache, retrying once")
                 _local_token_cache.pop(self.login_id, None)
@@ -300,7 +323,6 @@ class AirIQClient:
                         await redis.delete(f"air_iq:token:{self.login_id}")
                 except Exception:
                     pass
-                # Single retry with fresh token
                 token = await self.get_token()
                 response = await self._http.post(
                     f"{self.base_url}/search",
@@ -310,9 +332,9 @@ class AirIQClient:
                 response.raise_for_status()
                 payload = response.json()
                 if str(payload.get("code", "")) != "200" or payload.get("status") != "success":
-                    logger.error(
-                        "AIR IQ search retry non-success: code=%s message=%s",
-                        payload.get("code"),
+                    logger.warning(
+                        "AIR IQ search retry: no flights for %s→%s on %s (message=%s)",
+                        origin, destination, target_date,
                         payload.get("message", ""),
                     )
                     return [], ""
