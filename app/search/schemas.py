@@ -49,11 +49,11 @@ class FlightSearchRequest(BaseModel):
     @field_validator('depart_date')
     @classmethod
     def validate_depart_date(cls, v: date) -> date:
-        """AIR IQ requires departure date at least 30 days from today."""
+        """Departure date must not be in the past."""
         from datetime import date as date_cls
         delta = (v - date_cls.today()).days
-        if delta < 30:
-            raise ValueError('Departure date must be at least 30 days from today')
+        if delta < 0:
+            raise ValueError('Departure date cannot be in the past')
         return v
 
     @field_validator('return_date')
