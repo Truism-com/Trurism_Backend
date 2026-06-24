@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_, desc, asc
 from sqlalchemy.orm import selectinload
 from typing import Optional, Dict, Any, List
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 import secrets
 import re
 import logging
@@ -39,7 +39,7 @@ def generate_code(prefix: str = "PKG") -> str:
 
 def generate_ref(prefix: str = "ENQ") -> str:
     """Generate unique reference number."""
-    timestamp = datetime.utcnow().strftime("%Y%m%d")
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d")
     random_part = secrets.token_hex(3).upper()
     return f"{prefix}{timestamp}{random_part}"
 
@@ -707,7 +707,7 @@ class PackageEnquiryService:
                 setattr(enquiry, key, value)
         
         if updates.get('status') in [EnquiryStatus.CONTACTED, EnquiryStatus.QUOTE_SENT]:
-            enquiry.last_contact_at = datetime.utcnow()
+            enquiry.last_contact_at = datetime.now(timezone.utc)
         
         await self.db.commit()
         await self.db.refresh(enquiry)
@@ -900,7 +900,7 @@ class PackageEnquiryService:
             return None
         
         booking.status = PackageBookingStatus.CANCELLED
-        booking.cancelled_at = datetime.utcnow()
+        booking.cancelled_at = datetime.now(timezone.utc)
         booking.cancellation_reason = reason
         booking.refund_amount = refund_amount
         

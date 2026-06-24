@@ -11,7 +11,7 @@ Business logic for wallet operations including:
 
 import uuid
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Dict, Any, Tuple
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, and_, func, or_
@@ -59,14 +59,14 @@ class TransactionLimitExceededError(WalletError):
 
 def generate_transaction_ref() -> str:
     """Generate unique transaction reference."""
-    timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
     unique_id = str(uuid.uuid4())[:8].upper()
     return f"TXN{timestamp}{unique_id}"
 
 
 def generate_topup_ref() -> str:
     """Generate unique top-up reference."""
-    timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
     unique_id = str(uuid.uuid4())[:8].upper()
     return f"TOP{timestamp}{unique_id}"
 
@@ -222,7 +222,7 @@ class WalletService:
         balance_before = wallet.balance
         wallet.balance += amount
         wallet.total_credited += amount
-        wallet.last_transaction_at = datetime.utcnow()
+        wallet.last_transaction_at = datetime.now(timezone.utc)
         
         transaction = WalletTransaction(
             wallet_id=wallet.id,
@@ -334,7 +334,7 @@ class WalletService:
             wallet.credit_used += debit_from_credit
         
         wallet.total_debited += amount
-        wallet.last_transaction_at = datetime.utcnow()
+        wallet.last_transaction_at = datetime.now(timezone.utc)
         
         transaction = WalletTransaction(
             wallet_id=wallet.id,
@@ -363,7 +363,7 @@ class WalletService:
     
     async def _get_today_debits(self, wallet_id: int) -> float:
         """Get total debits for today."""
-        today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
         
         result = await self.db.execute(
             select(func.sum(WalletTransaction.amount))
@@ -441,7 +441,7 @@ class WalletService:
         from_balance_before = from_wallet.balance
         from_wallet.balance -= amount
         from_wallet.total_debited += amount
-        from_wallet.last_transaction_at = datetime.utcnow()
+        from_wallet.last_transaction_at = datetime.now(timezone.utc)
         
         debit_txn = WalletTransaction(
             wallet_id=from_wallet.id,
@@ -460,7 +460,7 @@ class WalletService:
         to_balance_before = to_wallet.balance
         to_wallet.balance += amount
         to_wallet.total_credited += amount
-        to_wallet.last_transaction_at = datetime.utcnow()
+        to_wallet.last_transaction_at = datetime.now(timezone.utc)
         
         credit_txn = WalletTransaction(
             wallet_id=to_wallet.id,
@@ -563,7 +563,7 @@ class WalletService:
         
         # Place hold
         hold_id = generate_hold_id()
-        expires_at = datetime.utcnow() + timedelta(minutes=expiry_minutes)
+        expires_at = datetime.now(timezone.utc) + timedelta(minutes=expiry_minutes)
         
         wallet.hold_amount += amount
         await self.db.commit()
@@ -909,7 +909,7 @@ class TopupService:
         # Update topup request
         topup_request.razorpay_payment_id = razorpay_payment_id
         topup_request.status = TopupStatus.COMPLETED
-        topup_request.processed_at = datetime.utcnow()
+        topup_request.processed_at = datetime.now(timezone.utc)
         
         # Credit wallet
         wallet = await self.wallet_service.get_wallet(topup_request.wallet_id)
@@ -962,7 +962,7 @@ class TopupService:
         # Update status
         topup_request.status = TopupStatus.APPROVED
         topup_request.processed_by_id = approved_by_id
-        topup_request.processed_at = datetime.utcnow()
+        topup_request.processed_at = datetime.now(timezone.utc)
         
         # Credit wallet
         wallet = await self.wallet_service.get_wallet(topup_request.wallet_id)
@@ -1018,7 +1018,7 @@ class TopupService:
         
         topup_request.status = TopupStatus.REJECTED
         topup_request.processed_by_id = rejected_by_id
-        topup_request.processed_at = datetime.utcnow()
+        topup_request.processed_at = datetime.now(timezone.utc)
         topup_request.rejection_reason = reason
         
         await self.db.commit()

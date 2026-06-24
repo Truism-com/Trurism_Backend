@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_, func, update, delete
 from sqlalchemy.orm import selectinload
 from typing import Optional, List, Dict, Any, Tuple
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 import uuid
 
 from app.hotels.models import (
@@ -808,7 +808,7 @@ class HotelInventoryService:
             return None
         
         booking.status = BookingStatus.CANCELLED
-        booking.cancelled_at = datetime.utcnow()
+        booking.cancelled_at = datetime.now(timezone.utc)
         booking.cancellation_reason = reason
         booking.cancellation_charges = cancellation_charges
         booking.refund_amount = refund_amount

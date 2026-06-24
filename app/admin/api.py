@@ -12,7 +12,7 @@ This module defines FastAPI endpoints for administrative operations:
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
 from app.core.database import get_database_session
 from app.auth.api import get_current_admin_user
@@ -546,7 +546,7 @@ async def get_system_health(
             },
             "overall_status": overall_status,
             "response_time": 0.1,  # TODO: Calculate actual response time
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
         
     except Exception as e:

@@ -11,7 +11,7 @@ from sqlalchemy import Column, Integer, String, DateTime, Boolean, Text, Enum, J
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 import enum
-from datetime import datetime
+from datetime import datetime, timezone
 
 from app.core.database import Base
 
@@ -85,7 +85,7 @@ class APIKey(Base):
         if not self.is_active or self.revoked_at:
             return False
         
-        if self.expires_at and self.expires_at < datetime.utcnow():
+        if self.expires_at and self.expires_at < datetime.now(timezone.utc):
             return False
         
         return True

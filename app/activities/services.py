@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_
 from sqlalchemy.orm import selectinload
 from typing import Optional, Dict, Any, List
-from datetime import datetime, date, time
+from datetime import datetime, date, time, timezone
 import secrets
 import re
 import json
@@ -38,7 +38,7 @@ def generate_code(prefix: str = "ACT") -> str:
 
 def generate_ref(prefix: str = "ABK") -> str:
     """Generate unique reference number."""
-    timestamp = datetime.utcnow().strftime("%Y%m%d")
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d")
     random_part = secrets.token_hex(3).upper()
     return f"{prefix}{timestamp}{random_part}"
 
@@ -590,7 +590,7 @@ class ActivityService:
         # Auto-confirm if instant confirmation
         if activity.is_instant_confirmation:
             booking.is_confirmed = True
-            booking.confirmed_at = datetime.utcnow()
+            booking.confirmed_at = datetime.now(timezone.utc)
             booking.status = BookingStatus.CONFIRMED
             booking.confirmation_code = generate_code("CNF")
         
@@ -692,7 +692,7 @@ class ActivityService:
         
         # Auto-update confirmed status
         if updates.get('is_confirmed') and not booking.confirmed_at:
-            booking.confirmed_at = datetime.utcnow()
+            booking.confirmed_at = datetime.now(timezone.utc)
             booking.confirmation_code = generate_code("CNF")
             booking.status = BookingStatus.CONFIRMED
         
@@ -712,7 +712,7 @@ class ActivityService:
             return None
         
         booking.status = BookingStatus.CANCELLED
-        booking.cancelled_at = datetime.utcnow()
+        booking.cancelled_at = datetime.now(timezone.utc)
         booking.cancellation_reason = reason
         booking.refund_amount = refund_amount
         

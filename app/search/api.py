@@ -77,9 +77,10 @@ async def search_flights(
             detail=f"Invalid date format: {str(e)}"
         )
     except Exception as e:
+        logging.getLogger(__name__).error(f"Flight search GET failed: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Search failed: {str(e)}"
+            detail="Search failed due to an internal error. Please try again."
         )
 
 
@@ -110,7 +111,7 @@ async def search_flights_post(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Search failed: {str(e)}"
+            detail="Search failed due to an internal error. Please try again."
         )
 
 
@@ -175,7 +176,7 @@ async def search_hotels(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Search failed: {str(e)}"
+            detail="Search failed due to an internal error. Please try again."
         )
 
 
@@ -206,7 +207,7 @@ async def search_hotels_post(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Search failed: {str(e)}"
+            detail="Search failed due to an internal error. Please try again."
         )
 
 
@@ -258,7 +259,7 @@ async def search_buses(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Search failed: {str(e)}"
+            detail="Search failed due to an internal error. Please try again."
         )
 
 
@@ -289,7 +290,7 @@ async def search_buses_post(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Search failed: {str(e)}"
+            detail="Search failed due to an internal error. Please try again."
         )
 
 
@@ -353,5 +354,5 @@ async def clear_search_cache(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Cache clearing failed: {str(e)}"
+            detail="Cache clearing failed. Please try again."
         )

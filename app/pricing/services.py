@@ -6,7 +6,7 @@ Business logic for markup, discount, and fee calculations.
 
 import logging
 from typing import Optional, List, Dict, Any, Tuple
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 from decimal import Decimal, ROUND_HALF_UP
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_, desc
@@ -564,7 +564,7 @@ class PricingService:
             'grand_total': base_fare + taxes,
             'you_save': Decimal(0),
             'effective_margin': Decimal(0),
-            'calculated_at': datetime.utcnow()
+            'calculated_at': datetime.now(timezone.utc)
         }
         
         # =====================================================================

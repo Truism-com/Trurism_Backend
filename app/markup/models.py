@@ -11,7 +11,7 @@ from sqlalchemy import Column, Integer, String, DateTime, Boolean, Float, JSON, 
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 import enum
-from datetime import datetime
+from datetime import datetime, timezone
 
 from app.core.database import Base
 
@@ -105,7 +105,7 @@ class MarkupRule(Base):
         if not self.is_active:
             return False
         
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         
         if self.valid_from and now < self.valid_from:
             return False

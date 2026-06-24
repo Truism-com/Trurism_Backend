@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_
 from sqlalchemy.orm import selectinload
 from typing import Optional, Dict, Any, List
-from datetime import datetime, date, time, timedelta
+from datetime import datetime, date, time, timedelta, timezone
 import secrets
 import re
 import logging
@@ -31,7 +31,7 @@ def generate_slug(name: str) -> str:
 
 def generate_ref(prefix: str = "TRF") -> str:
     """Generate unique reference number."""
-    timestamp = datetime.utcnow().strftime("%Y%m%d")
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d")
     random_part = secrets.token_hex(3).upper()
     return f"{prefix}{timestamp}{random_part}"
 
@@ -539,7 +539,7 @@ class TransferService:
         
         # Auto-update timestamps
         if updates.get('driver_name') and not booking.driver_assigned_at:
-            booking.driver_assigned_at = datetime.utcnow()
+            booking.driver_assigned_at = datetime.now(timezone.utc)
             booking.status = TransferBookingStatus.DRIVER_ASSIGNED
         
         await self.db.commit()
@@ -570,7 +570,7 @@ class TransferService:
             return None
         
         booking.status = TransferBookingStatus.IN_PROGRESS
-        booking.started_at = datetime.utcnow()
+        booking.started_at = datetime.now(timezone.utc)
         await self.db.commit()
         await self.db.refresh(booking)
         return booking
@@ -586,7 +586,7 @@ class TransferService:
             return None
         
         booking.status = TransferBookingStatus.COMPLETED
-        booking.completed_at = datetime.utcnow()
+        booking.completed_at = datetime.now(timezone.utc)
         
         if actual_km:
             booking.actual_km = actual_km
@@ -607,7 +607,7 @@ class TransferService:
             return None
         
         booking.status = TransferBookingStatus.CANCELLED
-        booking.cancelled_at = datetime.utcnow()
+        booking.cancelled_at = datetime.now(timezone.utc)
         booking.cancellation_reason = reason
         booking.refund_amount = refund_amount
         

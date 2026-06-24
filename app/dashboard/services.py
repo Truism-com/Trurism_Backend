@@ -6,7 +6,7 @@ Business logic for B2C customer dashboard.
 
 import logging
 from typing import Optional, List, Dict, Any, Tuple
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, or_, and_, desc
 
@@ -58,7 +58,7 @@ class DashboardService:
             existing.refresh_token = refresh_token
             existing.token_expires_at = token_expires_at
             existing.profile_data = profile_data
-            existing.last_used_at = datetime.utcnow()
+            existing.last_used_at = datetime.now(timezone.utc)
             existing.is_active = True
             await self.db.commit()
             await self.db.refresh(existing)
@@ -397,7 +397,7 @@ class DashboardService:
             amendment.processed_by = processed_by
         
         if status in [AmendmentStatus.APPROVED, AmendmentStatus.REJECTED]:
-            amendment.processed_at = datetime.utcnow()
+            amendment.processed_at = datetime.now(timezone.utc)
         
         await self.db.commit()
         await self.db.refresh(amendment)
@@ -585,7 +585,7 @@ class DashboardService:
             query.priority = priority
         
         if status == QueryStatus.RESOLVED:
-            query.resolved_at = datetime.utcnow()
+            query.resolved_at = datetime.now(timezone.utc)
         
         await self.db.commit()
         await self.db.refresh(query)

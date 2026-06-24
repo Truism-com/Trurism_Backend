@@ -78,39 +78,15 @@ class PassengerSchema(BaseModel):
 class PaymentDetailsSchema(BaseModel):
     """
     Schema for payment information in bookings.
-    
-    Validates payment method and related details for processing
-    bookings with different payment options.
+
+    Card/UPI details are tokenized client-side by Razorpay.
+    Only Razorpay token IDs reach the backend — never raw card data.
     """
     method: PaymentMethod = Field(..., description="Payment method")
-    card_number: Optional[str] = Field(None, description="Card number (masked)")
-    card_expiry: Optional[str] = Field(None, description="Card expiry date (MM/YY)")
-    card_cvv: Optional[str] = Field(None, min_length=3, max_length=4, description="Card CVV")
-    upi_id: Optional[str] = Field(None, description="UPI ID for UPI payments")
-    bank_name: Optional[str] = Field(None, description="Bank name for net banking")
+    razorpay_payment_id: Optional[str] = Field(None, description="Razorpay payment ID (for card/UPI/netbanking)")
+    razorpay_order_id: Optional[str] = Field(None, description="Razorpay order ID")
+    razorpay_signature: Optional[str] = Field(None, description="Razorpay signature for verification")
     wallet_type: Optional[str] = Field(None, description="Wallet type for wallet payments")
-    
-    @field_validator('card_number')
-    @classmethod
-    def validate_card_number(cls, v: Optional[str], info) -> Optional[str]:
-        """Validate card number format."""
-        method = info.data.get('method')
-        if method == PaymentMethod.CARD and not v:
-            raise ValueError('Card number is required for card payments')
-        if v and not v.replace(' ', '').replace('-', '').isdigit():
-            raise ValueError('Invalid card number format')
-        return v
-    
-    @field_validator('upi_id')
-    @classmethod
-    def validate_upi_id(cls, v: Optional[str], info) -> Optional[str]:
-        """Validate UPI ID format."""
-        method = info.data.get('method')
-        if method == PaymentMethod.UPI and not v:
-            raise ValueError('UPI ID is required for UPI payments')
-        if v and '@' not in v:
-            raise ValueError('Invalid UPI ID format')
-        return v
 
 
 class FlightBookingRequest(BaseModel):

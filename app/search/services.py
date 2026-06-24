@@ -12,7 +12,7 @@ import asyncio
 import hashlib
 import json
 from typing import List, Dict, Any, Optional, Tuple
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import uuid
 import random
 import httpx
@@ -74,7 +74,7 @@ class BaseSearchService:
         if not self.redis or not results:
             return
         try:
-            results["cached_at"] = datetime.utcnow().isoformat()
+            results["cached_at"] = datetime.now(timezone.utc).isoformat()
             await self.redis.setex(cache_key, ttl, json.dumps(results))
         except Exception as e:
             logger.error(f"Cache write error: {e}")
@@ -97,7 +97,7 @@ class BaseSearchService:
     
     def _calculate_search_time(self, start_time: datetime) -> float:
         """Calculate search execution time."""
-        return (datetime.utcnow() - start_time).total_seconds()
+        return (datetime.now(timezone.utc) - start_time).total_seconds()
 
 
 class FlightSearchService(BaseSearchService):
@@ -109,7 +109,7 @@ class FlightSearchService(BaseSearchService):
         """
         Search for available flights.
         """
-        start_time = datetime.utcnow()
+        start_time = datetime.now(timezone.utc)
         # Generate cache key
         cache_key = self._get_cache_key("flight", search_request.model_dump())
         search_id = cache_key.replace("search:flight:", "")
@@ -181,7 +181,7 @@ class HotelSearchService(BaseSearchService):
         """
         Search for available hotels.
         """
-        start_time = datetime.utcnow()
+        start_time = datetime.now(timezone.utc)
         cache_key = self._get_cache_key("hotel", search_request.model_dump())
         search_id = cache_key.replace("search:hotel:", "")
         
@@ -273,7 +273,7 @@ class BusSearchService(BaseSearchService):
         """
         Search for available buses.
         """
-        start_time = datetime.utcnow()
+        start_time = datetime.now(timezone.utc)
         cache_key = self._get_cache_key("bus", search_request.model_dump())
         search_id = cache_key.replace("search:bus:", "")
         

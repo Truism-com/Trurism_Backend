@@ -12,7 +12,7 @@ This module contains business logic for booking operations:
 import uuid
 import asyncio
 import random
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone as tz
 from typing import List, Optional, Dict, Any
 from decimal import Decimal
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -48,11 +48,11 @@ class BaseBookingService:
     
     def _generate_booking_reference(self) -> str:
         """Generate unique booking reference number."""
-        return f"BK{datetime.utcnow().strftime('%Y%m%d')}{uuid.uuid4().hex[:8].upper()}"
+        return f"BK{datetime.now(tz.utc).strftime('%Y%m%d')}{uuid.uuid4().hex[:8].upper()}"
     
     def _calculate_expiry_time(self, hours: int = 24) -> datetime:
         """Calculate booking expiry time."""
-        return datetime.utcnow() + timedelta(hours=hours)
+        return datetime.now(tz.utc) + timedelta(hours=hours)
     
     async def _process_payment(self, payment_details: Dict[str, Any], amount: float) -> Dict[str, Any]:
         """Subclasses must use BookingPaymentProcessor instead."""
@@ -129,8 +129,8 @@ class FlightBookingService(BaseBookingService):
                 flight_number=flight_data.get('flight_number', ''),
                 origin=flight_data.get('origin', ''),
                 destination=flight_data.get('destination', ''),
-                departure_time=datetime.fromisoformat(flight_data['departure_time'].replace('Z', '+00:00')) if flight_data.get('departure_time') else datetime.utcnow(),
-                arrival_time=datetime.fromisoformat(flight_data['arrival_time'].replace('Z', '+00:00')) if flight_data.get('arrival_time') else datetime.utcnow(),
+                departure_time=datetime.fromisoformat(flight_data['departure_time'].replace('Z', '+00:00')) if flight_data.get('departure_time') else datetime.now(tz.utc),
+                arrival_time=datetime.fromisoformat(flight_data['arrival_time'].replace('Z', '+00:00')) if flight_data.get('arrival_time') else datetime.now(tz.utc),
                 travel_class=flight_data.get('travel_class', 'economy'),
                 search_guid=flight_data.get('search_guid'),
                 passenger_count=len(booking_request.passengers),
@@ -349,7 +349,7 @@ class FlightBookingService(BaseBookingService):
             raise HTTPException(status_code=400, detail="Already cancelled")
         
         # Calculate refund (simplified)
-        refund_amount = booking.total_amount * Decimal("0.8") if (booking.departure_time - datetime.now(timezone.utc)).total_seconds() > 86400 else Decimal("0")
+        refund_amount = booking.total_amount * Decimal("0.8") if (booking.departure_time - datetime.now(tz.utc)).total_seconds() > 86400 else Decimal("0")
         
         # Process refund via processor
         if refund_amount > 0:
@@ -510,7 +510,7 @@ class HotelBookingService(BaseBookingService):
             raise HTTPException(status_code=400, detail="Already cancelled")
         
         # Calculate refund (80% if more than 24h before checkin)
-        time_until_checkin = (booking.checkin_date - datetime.now(timezone.utc)).total_seconds()
+        time_until_checkin = (booking.checkin_date - datetime.now(tz.utc)).total_seconds()
         refund_amount = booking.total_amount * Decimal("0.8") if time_until_checkin > 86400 else Decimal("0")
         
         if refund_amount > 0:
@@ -685,7 +685,7 @@ class BusBookingService(BaseBookingService):
             raise HTTPException(status_code=400, detail="Already cancelled")
         
         # Calculate refund (80% if more than 24h before departure)
-        time_until_departure = (booking.departure_time - datetime.now(timezone.utc)).total_seconds()
+        time_until_departure = (booking.departure_time - datetime.now(tz.utc)).total_seconds()
         refund_amount = booking.total_amount * Decimal("0.8") if time_until_departure > 86400 else Decimal("0")
         
         if refund_amount > 0:

@@ -18,7 +18,7 @@ Falls back to module-level dict when Redis is not available.
 import logging
 import json
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
@@ -358,7 +358,7 @@ class AirIQClient:
                         f"{dep_date_str} {dep_time_str}", "%Y-%m-%d %H:%M"
                     )
                 except (ValueError, TypeError):
-                    dep_dt = datetime.utcnow()
+                    dep_dt = datetime.now(timezone.utc)
 
                 try:
                     arr_dt = datetime.strptime(

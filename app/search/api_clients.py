@@ -14,7 +14,7 @@ import httpx
 import xmltodict
 import logging
 from typing import Dict, Any, Optional, List
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 from abc import ABC, abstractmethod
 import hashlib
 import hmac
@@ -157,7 +157,7 @@ class FlightAPIClient(BaseAPIClient):
             
             self.session_token = data.get("access_token")
             expires_in = data.get("expires_in", 3600)
-            self.token_expiry = datetime.utcnow() + timedelta(seconds=expires_in)
+            self.token_expiry = datetime.now(timezone.utc) + timedelta(seconds=expires_in)
             
             return data
         except Exception as e:
@@ -166,7 +166,7 @@ class FlightAPIClient(BaseAPIClient):
     
     async def _ensure_authenticated(self):
         """Ensure we have a valid session token."""
-        if not self.session_token or (self.token_expiry and datetime.utcnow() >= self.token_expiry):
+        if not self.session_token or (self.token_expiry and datetime.now(timezone.utc) >= self.token_expiry):
             await self.authenticate()
     
     async def search_flights(
@@ -306,7 +306,7 @@ class BusAPIClient(BaseAPIClient):
     
     def get_headers(self) -> Dict[str, str]:
         # Generate signature for authentication
-        timestamp = datetime.utcnow().isoformat()
+        timestamp = datetime.now(timezone.utc).isoformat()
         signature = self._generate_signature(timestamp)
         
         return {

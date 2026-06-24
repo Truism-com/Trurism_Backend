@@ -190,7 +190,9 @@ class UserProfileUpdate(BaseModel):
     name: Optional[str] = None
     phone: Optional[str] = None
     address: Optional[str] = None
-    
+    company_name: Optional[str] = Field(None, max_length=255)
+    pan_number: Optional[str] = Field(None, max_length=20, pattern=r"^[A-Z]{5}[0-9]{4}[A-Z]$")
+
     @field_validator('phone')
     @classmethod
     def validate_phone(cls, v: Optional[str]) -> Optional[str]:
@@ -277,4 +279,6 @@ class ResetPasswordRequest(BaseModel):
             raise ValueError('Password must contain at least one lowercase letter')
         if not any(c.isdigit() for c in v):
             raise ValueError('Password must contain at least one digit')
+        if not any(c in '!@#$%^&*()_+-=[]{}|;:,.<>?' for c in v):
+            raise ValueError('Password must contain at least one special character (!@#$%^&*()_+-=[]{}|;:,.<>?)')
         return v

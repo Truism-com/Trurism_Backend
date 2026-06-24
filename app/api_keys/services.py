@@ -11,7 +11,7 @@ This module contains business logic for API key management:
 import secrets
 import hashlib
 from typing import List, Optional, Dict, Any
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
 from fastapi import HTTPException, status
@@ -94,7 +94,7 @@ class APIKeyService:
         # Calculate expiration
         expires_at = None
         if key_data.expires_in_days:
-            expires_at = datetime.utcnow() + timedelta(days=key_data.expires_in_days)
+            expires_at = datetime.now(timezone.utc) + timedelta(days=key_data.expires_in_days)
         
         # Create API key record
         api_key = APIKey(
@@ -224,13 +224,13 @@ class APIKeyService:
             .where(APIKey.id == key_id)
             .values(
                 usage_count=APIKey.usage_count + 1,
-                last_used_at=datetime.utcnow()
+                last_used_at=datetime.now(timezone.utc)
             )
         )
         await self.db.commit()
         
         # Track in Redis for rate limiting
-        rate_limit_key = f"api_key_rate:{key_hash}:{datetime.utcnow().strftime('%Y%m%d%H%M')}"
+        rate_limit_key = f"api_key_rate:{key_hash}:{datetime.now(timezone.utc).strftime('%Y%m%d%H%M')}"
         await self.redis.incr(rate_limit_key)
         await self.redis.expire(rate_limit_key, 120)  # Keep for 2 minutes
     
@@ -245,7 +245,7 @@ class APIKeyService:
             bool: True if within limit, False if exceeded
         """
         key_hash = api_key.key
-        current_minute = datetime.utcnow().strftime('%Y%m%d%H%M')
+        current_minute = datetime.now(timezone.utc).strftime('%Y%m%d%H%M')
         rate_limit_key = f"api_key_rate:{key_hash}:{current_minute}"
         
         count = await self.redis.get(rate_limit_key)
@@ -306,7 +306,7 @@ class APIKeyService:
         if not api_key:
             return False
         
-        api_key.revoked_at = datetime.utcnow()
+        api_key.revoked_at = datetime.now(timezone.utc)
         api_key.is_active = False
         
         await self.db.commit()

@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_
 from sqlalchemy.orm import selectinload
 from typing import Optional, Dict, Any, List
-from datetime import datetime
+from datetime import datetime, timezone
 import secrets
 import re
 import logging
@@ -32,7 +32,7 @@ def generate_slug(name: str) -> str:
 
 def generate_ref(prefix: str = "VSA") -> str:
     """Generate unique reference number."""
-    timestamp = datetime.utcnow().strftime("%Y%m%d")
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d")
     random_part = secrets.token_hex(3).upper()
     return f"{prefix}{timestamp}{random_part}"
 
@@ -470,7 +470,7 @@ class VisaService:
         
         # Auto-update processed_at when status changes to approved/rejected
         if updates.get('status') in [ApplicationStatus.APPROVED, ApplicationStatus.REJECTED]:
-            application.processed_at = datetime.utcnow()
+            application.processed_at = datetime.now(timezone.utc)
         
         await self.db.commit()
         await self.db.refresh(application)
@@ -489,7 +489,7 @@ class VisaService:
             raise ValueError("Only draft applications can be submitted")
         
         application.status = ApplicationStatus.SUBMITTED
-        application.submitted_at = datetime.utcnow()
+        application.submitted_at = datetime.now(timezone.utc)
         
         await self.db.commit()
         await self.db.refresh(application)

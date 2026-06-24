@@ -293,15 +293,27 @@ async def refresh_access_token(
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-    # Create new access token
+    # Create new access token and rotate refresh token
     token_data = {"sub": str(user.id), "email": user.email, "role": user.role.value}
     access_token = SecurityManager.create_access_token(
         data=token_data,
         expires_delta=timedelta(minutes=settings.access_token_expire_minutes)
     )
-    
+
+    new_refresh_token = SecurityManager.create_refresh_token(data=token_data)
+
+    # Revoke old refresh token and persist the new one
+    try:
+        await auth_service.revoke_refresh_token(refresh_data.refresh_token)
+        expires_at = SecurityManager.get_token_expiration(new_refresh_token)
+        if expires_at is not None:
+            await auth_service.create_refresh_token_record(user.id, new_refresh_token, expires_at)
+    except Exception as db_err:
+        logger.warning("Refresh token rotation DB error for user %d: %s", user.id, db_err)
+
     return {
         "access_token": access_token,
+        "refresh_token": new_refresh_token,
         "token_type": "bearer",
         "expires_in": settings.access_token_expire_minutes * 60
     }

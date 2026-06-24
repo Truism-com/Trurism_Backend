@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
 from fastapi import HTTPException, status
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
 import secrets
 from app.core.redis import get_redis_client
@@ -163,7 +163,7 @@ class AuthService:
             )
         
         # Update last login
-        user.last_login = datetime.utcnow()
+        user.last_login = datetime.now(timezone.utc)
         await self.db.commit()
         
         return user

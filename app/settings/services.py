@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_
 from sqlalchemy.orm import selectinload
 from typing import Optional, List, Tuple, Any, Dict
-from datetime import datetime
+from datetime import datetime, timezone
 
 from app.settings.models import (
     ConvenienceFee, StaffRole, StaffPermission, StaffMember,
@@ -637,7 +637,7 @@ class SettingsService:
         """Update staff last login time."""
         staff = await self.get_staff_member_by_user(user_id)
         if staff:
-            staff.last_login_at = datetime.utcnow()
+            staff.last_login_at = datetime.now(timezone.utc)
             await self.db.commit()
     
     async def delete_staff_member(self, staff_id: int) -> bool:

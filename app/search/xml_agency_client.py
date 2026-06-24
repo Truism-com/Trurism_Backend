@@ -13,7 +13,7 @@ DEPRECATED - kept as fallback. See airiq_client.py for active integration.
 
 import logging
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 try:
@@ -231,7 +231,7 @@ class XMLAgencyClient:
                 try:
                     dep_dt = datetime.strptime(dep_str, _DT_FMT)
                 except (ValueError, TypeError):
-                    dep_dt = datetime.utcnow()
+                    dep_dt = datetime.now(timezone.utc)
 
                 try:
                     arr_dt = datetime.strptime(arr_str, _DT_FMT)

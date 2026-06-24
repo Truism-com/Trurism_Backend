@@ -10,7 +10,7 @@ This module contains business logic for administrative operations:
 """
 
 from typing import List, Optional, Dict, Any, Tuple
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_
 from sqlalchemy.orm import selectinload
@@ -402,7 +402,7 @@ class AdminAnalyticsService:
 
     async def get_dashboard_stats(self) -> Dict[str, Any]:
         """Calculate real dashboard statistics from database."""
-        today = datetime.utcnow().date()
+        today = datetime.now(timezone.utc).date()
         today_start = datetime.combine(today, datetime.min.time())
         today_end = datetime.combine(today, datetime.max.time())
         month_start = datetime.combine(today.replace(day=1), datetime.min.time())

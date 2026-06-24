@@ -13,7 +13,7 @@ import hmac
 import hashlib
 import logging
 from typing import Optional, Dict, Any, Tuple
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 from sqlalchemy.exc import IntegrityError
@@ -119,7 +119,7 @@ class RazorpayService:
             order_data = {
                 'amount': amount_in_paise,
                 'currency': currency,
-                'receipt': f'wallet_topup_{datetime.utcnow().timestamp()}',
+                'receipt': f'wallet_topup_{datetime.now(timezone.utc).timestamp()}',
                 'payment_capture': 1,
                 'notes': notes or {}
             }
@@ -175,7 +175,7 @@ class RazorpayService:
             order_data = {
                 'amount': amount_in_paise,
                 'currency': 'INR',
-                'receipt': f'{booking_type}_{booking_id}_{datetime.utcnow().timestamp()}',
+                'receipt': f'{booking_type}_{booking_id}_{datetime.now(timezone.utc).timestamp()}',
                 'payment_capture': 1,  # Auto capture payment
                 'notes': {
                     'booking_id': str(booking_id),
@@ -292,7 +292,7 @@ class RazorpayService:
             transaction.razorpay_signature = razorpay_signature
             transaction.status = PaymentTransactionStatus.CAPTURED
             transaction.is_verified = True
-            transaction.verified_at = datetime.utcnow()
+            transaction.verified_at = datetime.now(timezone.utc)
             
             await self.db.commit()
             
@@ -439,7 +439,7 @@ class RazorpayService:
                 status=RefundStatus.PROCESSED,
                 gateway_response=razorpay_refund,
                 processed_by_id=processed_by_id,
-                processed_at=datetime.utcnow()
+                processed_at=datetime.now(timezone.utc)
             )
             
             self.db.add(refund)
@@ -716,7 +716,7 @@ class WebhookService:
                 logger.info(f"Unhandled webhook event: {event_type}")
             
             webhook_log.is_processed = True
-            webhook_log.processed_at = datetime.utcnow()
+            webhook_log.processed_at = datetime.now(timezone.utc)
             
         except Exception as e:
             logger.error(f"Webhook processing error: {e}")
@@ -753,7 +753,7 @@ class WebhookService:
             transaction.status = PaymentTransactionStatus.CAPTURED
             transaction.payment_method = payment_entity.get('method', '')
             transaction.is_verified = True
-            transaction.verified_at = datetime.utcnow()
+            transaction.verified_at = datetime.now(timezone.utc)
             transaction.gateway_response = payment_entity
             
             await self.razorpay_service._update_booking_status(transaction)

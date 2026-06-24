@@ -6,7 +6,7 @@ Business logic for company profile, bank accounts, registration, and ACL.
 
 import logging
 from typing import Optional, List, Dict, Any, Tuple, Set
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_, desc
 from sqlalchemy.orm import selectinload
@@ -433,7 +433,7 @@ class CompanyService:
         if existing:
             existing.is_active = True
             existing.assigned_by = assigned_by
-            existing.assigned_at = datetime.utcnow()
+            existing.assigned_at = datetime.now(timezone.utc)
             existing.expires_at = expires_at
             await self.db.commit()
             await self.db.refresh(existing)
@@ -480,7 +480,7 @@ class CompanyService:
             ACLUserRole.is_active == True,
             or_(
                 ACLUserRole.expires_at == None,
-                ACLUserRole.expires_at > datetime.utcnow()
+                ACLUserRole.expires_at > datetime.now(timezone.utc)
             )
         )
         

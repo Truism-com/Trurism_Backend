@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_
 from sqlalchemy.orm import selectinload
 from typing import Optional, List, Tuple
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 import re
 
 from app.cms.models import (
@@ -500,7 +500,7 @@ class CMSService:
         # Set published_at if publishing now
         published_at = None
         if data.publish_now or data.status == PostStatus.PUBLISHED:
-            published_at = datetime.utcnow()
+            published_at = datetime.now(timezone.utc)
             post_data['status'] = PostStatus.PUBLISHED
         
         post = BlogPost(
@@ -539,7 +539,7 @@ class CMSService:
         
         # Update published_at if status changed to published
         if update_data.get('status') == PostStatus.PUBLISHED and not post.published_at:
-            update_data['published_at'] = datetime.utcnow()
+            update_data['published_at'] = datetime.now(timezone.utc)
         
         for key, value in update_data.items():
             setattr(post, key, value)

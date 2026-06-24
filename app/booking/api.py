@@ -62,18 +62,27 @@ async def create_flight_booking(
 
         # Retrieve cached search results
         redis_client = get_redis_client()
-        if redis_client is not None:
-            cache_key = f"search:flight:{booking_request.search_id}"
-            try:
-                cached_data_str = await redis_client.get(cache_key)
-                if cached_data_str:
-                    cached_data = json.loads(cached_data_str)
-                    for result in cached_data.get("results", []):
-                        if result.get("offer_id") == booking_request.offer_id:
-                            flight_data = result
-                            break
-            except Exception as redis_err:
-                logging.getLogger(__name__).warning(f"Redis read during booking: {redis_err}")
+        if redis_client is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Search cache is temporarily unavailable. Please try again shortly."
+            )
+
+        cache_key = f"search:flight:{booking_request.search_id}"
+        try:
+            cached_data_str = await redis_client.get(cache_key)
+            if cached_data_str:
+                cached_data = json.loads(cached_data_str)
+                for result in cached_data.get("results", []):
+                    if result.get("offer_id") == booking_request.offer_id:
+                        flight_data = result
+                        break
+        except Exception as redis_err:
+            logging.getLogger(__name__).warning(f"Redis read during booking: {redis_err}")
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Search cache is temporarily unavailable. Please try again shortly."
+            )
 
         if flight_data is None:
             raise HTTPException(
@@ -282,17 +291,15 @@ async def get_user_bookings(
         hotel_service = HotelBookingService(db, tenant_id=tenant_id)
         bus_service = BusBookingService(db, tenant_id=tenant_id)
         
-        # Fetch all matching bookings from each service (no DB-level pagination;
-        # we combine and paginate over the merged set so the total count and
-        # page boundaries are correct across booking types).
+        max_per_table = 500
         flight_bookings = await flight_service.get_user_flight_bookings(
-            current_user.id, 0, 10000, status_filter
+            current_user.id, 0, max_per_table, status_filter
         )
         hotel_bookings = await hotel_service.get_user_hotel_bookings(
-            current_user.id, 0, 10000, status_filter
+            current_user.id, 0, max_per_table, status_filter
         )
         bus_bookings = await bus_service.get_user_bus_bookings(
-            current_user.id, 0, 10000, status_filter
+            current_user.id, 0, max_per_table, status_filter
         )
         
         # Combine and format bookings

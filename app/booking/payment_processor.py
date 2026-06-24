@@ -10,7 +10,7 @@ supporting multiple payment methods:
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any, Optional, Tuple
 from sqlalchemy.ext.asyncio import AsyncSession
 from enum import Enum
@@ -169,7 +169,7 @@ class BookingPaymentProcessor:
                 "wallet_amount": amount,
                 "razorpay_amount": 0,
                 "message": "Payment successful via wallet",
-                "processed_at": datetime.utcnow()
+                "processed_at": datetime.now(timezone.utc)
             }
             
         except InsufficientBalanceError as e:
@@ -178,7 +178,7 @@ class BookingPaymentProcessor:
                 "payment_method": PaymentMethod.WALLET,
                 "error": str(e),
                 "message": "Insufficient wallet balance",
-                "processed_at": datetime.utcnow()
+                "processed_at": datetime.now(timezone.utc)
             }
         except WalletError as e:
             return {
@@ -186,7 +186,7 @@ class BookingPaymentProcessor:
                 "payment_method": PaymentMethod.WALLET,
                 "error": str(e),
                 "message": "Wallet payment failed",
-                "processed_at": datetime.utcnow()
+                "processed_at": datetime.now(timezone.utc)
             }
     
     async def _process_razorpay_payment(
@@ -221,7 +221,7 @@ class BookingPaymentProcessor:
                     "payment_method": PaymentMethod.CARD,  # Generic for razorpay
                     "error": "Invalid payment signature",
                     "message": "Payment verification failed",
-                    "processed_at": datetime.utcnow()
+                    "processed_at": datetime.now(timezone.utc)
                 }
             
             # verify_payment() finds the PaymentTransaction by order_id,
@@ -245,7 +245,7 @@ class BookingPaymentProcessor:
                 "wallet_amount": 0,
                 "razorpay_amount": amount,
                 "message": "Payment successful via Razorpay",
-                "processed_at": datetime.utcnow()
+                "processed_at": datetime.now(timezone.utc)
             }
             
         except PaymentError as e:
@@ -255,7 +255,7 @@ class BookingPaymentProcessor:
                 "error": str(e),
                 "razorpay_payment_id": razorpay_payment_id,
                 "message": "Razorpay payment failed",
-                "processed_at": datetime.utcnow()
+                "processed_at": datetime.now(timezone.utc)
             }
     
     async def _process_split_payment(
@@ -322,7 +322,7 @@ class BookingPaymentProcessor:
                 "payment_method": PaymentMethod.WALLET,
                 "error": str(e),
                 "message": "Insufficient wallet balance for split payment",
-                "processed_at": datetime.utcnow()
+                "processed_at": datetime.now(timezone.utc)
             }
         except WalletError as e:
             return {
@@ -330,7 +330,7 @@ class BookingPaymentProcessor:
                 "payment_method": PaymentMethod.WALLET,
                 "error": str(e),
                 "message": "Wallet hold failed",
-                "processed_at": datetime.utcnow()
+                "processed_at": datetime.now(timezone.utc)
             }
         
         # Step 2: Verify Razorpay payment
@@ -397,7 +397,7 @@ class BookingPaymentProcessor:
                 "razorpay_amount": razorpay_amount,
                 "message": "Razorpay captured but wallet debit failed. Manual reconciliation required.",
                 "requires_manual_reconciliation": True,
-                "processed_at": datetime.utcnow()
+                "processed_at": datetime.now(timezone.utc)
             }
         
         # Both successful
@@ -411,7 +411,7 @@ class BookingPaymentProcessor:
             "wallet_amount": wallet_amount,
             "razorpay_amount": razorpay_amount,
             "message": "Split payment successful",
-            "processed_at": datetime.utcnow()
+            "processed_at": datetime.now(timezone.utc)
         }
     
     async def _process_agent_credit_payment(
@@ -448,7 +448,7 @@ class BookingPaymentProcessor:
                 "wallet_amount": amount,  # Includes credit usage
                 "razorpay_amount": 0,
                 "message": "Payment successful via agent credit",
-                "processed_at": datetime.utcnow()
+                "processed_at": datetime.now(timezone.utc)
             }
             
         except InsufficientBalanceError as e:
@@ -457,7 +457,7 @@ class BookingPaymentProcessor:
                 "payment_method": PaymentMethod.AGENT_CREDIT,
                 "error": str(e),
                 "message": "Insufficient credit limit",
-                "processed_at": datetime.utcnow()
+                "processed_at": datetime.now(timezone.utc)
             }
         except WalletError as e:
             return {
@@ -465,7 +465,7 @@ class BookingPaymentProcessor:
                 "payment_method": PaymentMethod.AGENT_CREDIT,
                 "error": str(e),
                 "message": "Agent credit payment failed",
-                "processed_at": datetime.utcnow()
+                "processed_at": datetime.now(timezone.utc)
             }
     
     async def create_payment_order(
