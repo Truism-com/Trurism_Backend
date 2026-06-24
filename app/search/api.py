@@ -8,6 +8,8 @@ This module defines FastAPI endpoints for search operations:
 - Search result caching and optimization
 """
 
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
@@ -108,7 +110,10 @@ async def search_flights_post(
         flight_service = FlightSearchService(db, tenant_id=tenant_id)
         results = await flight_service.search_flights(search_request)
         return results
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
+        logging.getLogger(__name__).error("Flight search POST failed: %s", e, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Search failed due to an internal error. Please try again."
@@ -204,7 +209,10 @@ async def search_hotels_post(
         hotel_service = HotelSearchService(db, tenant_id=tenant_id)
         results = await hotel_service.search_hotels(search_request)
         return results
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
+        logging.getLogger(__name__).error("Hotel search POST failed: %s", e, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Search failed due to an internal error. Please try again."
@@ -287,7 +295,10 @@ async def search_buses_post(
         bus_service = BusSearchService(db, tenant_id=tenant_id)
         results = await bus_service.search_buses(search_request)
         return results
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
+        logging.getLogger(__name__).error("Bus search POST failed: %s", e, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Search failed due to an internal error. Please try again."

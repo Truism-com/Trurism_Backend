@@ -46,6 +46,16 @@ class FlightSearchRequest(BaseModel):
     travel_class: TravelClass = Field(TravelClass.ECONOMY, description="Travel class")
     max_results: Optional[int] = Field(50, ge=1, le=100, description="Maximum search results")
     
+    @field_validator('depart_date')
+    @classmethod
+    def validate_depart_date(cls, v: date) -> date:
+        """AIR IQ requires departure date at least 30 days from today."""
+        from datetime import date as date_cls
+        delta = (v - date_cls.today()).days
+        if delta < 30:
+            raise ValueError('Departure date must be at least 30 days from today')
+        return v
+
     @field_validator('return_date')
     @classmethod
     def validate_return_date(cls, v: Optional[date], info) -> Optional[date]:
