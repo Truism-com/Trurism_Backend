@@ -8,7 +8,7 @@ This module defines Pydantic schemas for request/response validation:
 - Password reset schemas
 """
 
-from pydantic import BaseModel, EmailStr, field_validator, ConfigDict
+from pydantic import BaseModel, EmailStr, Field, field_validator, ConfigDict
 from typing import Optional
 from datetime import datetime
 from enum import Enum
