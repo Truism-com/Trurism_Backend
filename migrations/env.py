@@ -8,7 +8,7 @@ It sets up the database connection, imports all models, and configures migration
 import asyncio
 import os
 from logging.config import fileConfig
-from sqlalchemy import pool, engine_from_config
+from sqlalchemy import pool, engine_from_config, text
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import AsyncEngine
 from alembic import context
@@ -99,8 +99,19 @@ def get_url():
                 separator = "&" if "?" in db_url else "?"
                 # For asyncpg, use ssl=require for SSL connections
                 db_url = f"{db_url}{separator}ssl=require"
-    
+
+    # psycopg2/psycopg sync driver: uses sslmode=require (not ssl=require)
+    elif db_url.startswith("postgresql+psycopg2://") or db_url.startswith("postgresql+psycopg://"):
+        if "sslmode=" not in db_url:
+            is_local = "localhost" in db_url or "127.0.0.1" in db_url
+            is_remote_host = any(host in db_url for host in ["render.com", ".onrender.com", ".amazonaws.com", ".supabase.co", "pooler.supabase.com", ".azure.com", ".postgres.database.azure.com"])
+            is_production = settings.environment in ["production", "staging"]
+            if (is_production or is_remote_host) and not is_local:
+                separator = "&" if "?" in db_url else "?"
+                db_url = f"{db_url}{separator}sslmode=require"
+
     return db_url
+
 
 
 def run_migrations_offline() -> None:
@@ -159,6 +170,13 @@ def run_migrations_online() -> None:
             future=True,
         )
         with connectable.connect() as connection:
+            # Widen alembic_version.version_num if it was created as varchar(32).
+            # Revision IDs longer than 32 chars cause StringDataRightTruncation.
+            connection.execute(text(
+                "ALTER TABLE IF EXISTS alembic_version "
+                "ALTER COLUMN version_num TYPE character varying(200)"
+            ))
+            connection.commit()
             do_run_migrations(connection)
         connectable.dispose()
     else:
