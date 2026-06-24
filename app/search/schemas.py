@@ -155,6 +155,7 @@ class FlightResult(BaseModel):
     travel_class: TravelClass = Field(..., description="Travel class")
     baggage_allowance: Optional[str] = Field(None, description="Baggage allowance")
     refundable: bool = Field(False, description="Whether booking is refundable")
+    is_international: bool = Field(False, description="Whether flight is international")
     
     model_config = ConfigDict(
         json_encoders={datetime: lambda v: v.isoformat()}
@@ -237,5 +238,5 @@ class SearchCacheRequest(BaseModel):
     Used for cache invalidation and management operations.
     """
     search_type: str = Field(..., description="Type of search (flight, hotel, bus)")
-    cache_key: str = Field(..., description="Cache key to invalidate")
+    cache_key: Optional[str] = Field(None, description="Cache key to invalidate")
     reason: Optional[str] = Field(None, description="Reason for cache invalidation")

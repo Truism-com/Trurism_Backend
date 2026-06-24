@@ -75,10 +75,11 @@ async def create_flight_booking(
             except Exception as redis_err:
                 logging.getLogger(__name__).warning(f"Redis read during booking: {redis_err}")
 
-        # flight_data used for isinternational flag in passenger building.
-        # If not in cache, proceed with empty dict - AIR IQ validates the ticket_id directly.
         if flight_data is None:
-            flight_data = {}
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Flight offer not found in search cache. Please search again before booking."
+            )
 
         tenant_id = getattr(request.state, "tenant_id", None)
         booking_service = FlightBookingService(db, tenant_id=tenant_id)
@@ -95,7 +96,7 @@ async def create_flight_booking(
         logging.getLogger(__name__).error(f"Flight booking creation failed: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Flight booking creation failed: {str(e)}"
+            detail="Flight booking creation failed. Please try again."
         )
 
 
@@ -170,7 +171,7 @@ async def create_hotel_booking(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Hotel booking creation failed: {str(e)}"
+            detail="Hotel booking creation failed. Please try again."
         )
 
 
@@ -245,7 +246,7 @@ async def create_bus_booking(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Bus booking creation failed: {str(e)}"
+            detail="Bus booking creation failed. Please try again."
         )
 
 
@@ -253,7 +254,7 @@ async def create_bus_booking(
 async def get_user_bookings(
     page: int = Query(1, ge=1, description="Page number"),
     size: int = Query(10, ge=1, le=50, description="Number of bookings per page"),
-    status: Optional[BookingStatus] = Query(None, description="Filter by booking status"),
+    status_filter: Optional[BookingStatus] = Query(None, alias="status", description="Filter by booking status"),
     current_user: User = Depends(get_current_user),
     request: Request = None,
     db: AsyncSession = Depends(get_database_session)
@@ -275,23 +276,23 @@ async def get_user_bookings(
         BookingListResponse: Paginated list of user bookings
     """
     try:
-        skip = (page - 1) * size
-        
         tenant_id = getattr(request.state, "tenant_id", None)
         # Get bookings from all services
         flight_service = FlightBookingService(db, tenant_id=tenant_id)
         hotel_service = HotelBookingService(db, tenant_id=tenant_id)
         bus_service = BusBookingService(db, tenant_id=tenant_id)
         
-        # Get bookings from each service
+        # Fetch all matching bookings from each service (no DB-level pagination;
+        # we combine and paginate over the merged set so the total count and
+        # page boundaries are correct across booking types).
         flight_bookings = await flight_service.get_user_flight_bookings(
-            current_user.id, skip, size, status
+            current_user.id, 0, 10000, status_filter
         )
         hotel_bookings = await hotel_service.get_user_hotel_bookings(
-            current_user.id, skip, size, status
+            current_user.id, 0, 10000, status_filter
         )
         bus_bookings = await bus_service.get_user_bus_bookings(
-            current_user.id, skip, size, status
+            current_user.id, 0, 10000, status_filter
         )
         
         # Combine and format bookings
@@ -345,20 +346,23 @@ async def get_user_bookings(
                 "departure_time": booking.departure_time
             })
         
-        # Sort by creation date (most recent first)
+        # Sort by creation date (most recent first) then apply pagination
         all_bookings.sort(key=lambda x: x["created_at"], reverse=True)
-        
+        total = len(all_bookings)
+        skip = (page - 1) * size
+        page_bookings = all_bookings[skip: skip + size]
+
         return BookingListResponse(
-            total=len(all_bookings),
+            total=total,
             page=page,
             size=size,
-            bookings=all_bookings
+            bookings=page_bookings
         )
         
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to retrieve bookings: {str(e)}"
+            detail="Failed to retrieve bookings. Please try again."
         )
 
 
@@ -492,7 +496,7 @@ async def get_booking_details(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to retrieve booking details: {str(e)}"
+            detail="Failed to retrieve booking details. Please try again."
         )
 
 
@@ -581,7 +585,7 @@ async def cancel_booking(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to cancel booking: {str(e)}"
+            detail="Failed to cancel booking. Please try again."
         )
 
 
@@ -627,5 +631,5 @@ async def get_flight_booking_status(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to retrieve booking status: {str(e)}"
+            detail="Failed to retrieve booking status. Please try again."
         )

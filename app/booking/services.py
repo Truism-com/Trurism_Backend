@@ -129,8 +129,8 @@ class FlightBookingService(BaseBookingService):
                 flight_number=flight_data.get('flight_number', ''),
                 origin=flight_data.get('origin', ''),
                 destination=flight_data.get('destination', ''),
-                departure_time=datetime.fromisoformat(flight_data.get('departure_time', '').replace('Z', '+00:00')),
-                arrival_time=datetime.fromisoformat(flight_data.get('arrival_time', '').replace('Z', '+00:00')),
+                departure_time=datetime.fromisoformat(flight_data['departure_time'].replace('Z', '+00:00')) if flight_data.get('departure_time') else datetime.utcnow(),
+                arrival_time=datetime.fromisoformat(flight_data['arrival_time'].replace('Z', '+00:00')) if flight_data.get('arrival_time') else datetime.utcnow(),
                 travel_class=flight_data.get('travel_class', 'economy'),
                 search_guid=flight_data.get('search_guid'),
                 passenger_count=len(booking_request.passengers),
@@ -192,8 +192,8 @@ class FlightBookingService(BaseBookingService):
                             base["dob"] = dob.strftime("%Y/%m/%d")
                         else:
                             base["dob"] = str(dob).replace("-", "/")
-                    # International passport fields
-                    if flight_data.get("isinternational"):
+                    # International passport fields (AIR IQ uses "isinternational", cached results use "is_international")
+                    if flight_data.get("is_international") or flight_data.get("isinternational"):
                         for field in ("passport_number", "passport_expirydate",
                                       "passport_issuing_country_code", "nationality"):
                             if p_dict.get(field):

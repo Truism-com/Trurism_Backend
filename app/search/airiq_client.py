@@ -242,8 +242,6 @@ class AirIQClient:
         AIR IQ date format: YYYY/MM/DD
         AIR IQ typo in response: 'arival_time' and 'arival_date' (single 'r').
         """
-        token = await self.get_token()
-
         body: Dict[str, Any] = {
             "origin": request.origin.upper(),
             "destination": request.destination.upper(),
@@ -254,6 +252,7 @@ class AirIQClient:
         }
 
         try:
+            token = await self.get_token()
             response = await self._http.post(
                 f"{self.base_url}/search",
                 headers=self._auth_headers(token),
@@ -406,6 +405,7 @@ class AirIQClient:
                     travel_class=TravelClass.ECONOMY,
                     baggage_allowance=baggage_str,
                     refundable=False,
+                    is_international=bool(item.get("isinternational")),
                 )
                 results.append(result)
 

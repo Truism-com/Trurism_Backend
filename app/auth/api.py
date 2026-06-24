@@ -310,7 +310,7 @@ async def refresh_access_token(
 @router.post("/logout")
 async def logout_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
-    refresh_token: str = None,
+    body: RefreshTokenRequest = None,
     db: AsyncSession = Depends(get_database_session)
 ):
     """
@@ -332,14 +332,14 @@ async def logout_user(
     # Get token expiration time
     exp_timestamp = payload.get("exp")
     if exp_timestamp:
-        from datetime import datetime
-        expires_at = datetime.fromtimestamp(exp_timestamp)
+        from datetime import datetime, timezone
+        expires_at = datetime.fromtimestamp(exp_timestamp, tz=timezone.utc)
         await SecurityManager.blacklist_token(token, expires_at)
     
     # Revoke refresh token if provided
-    if refresh_token:
+    if body and body.refresh_token:
         auth_service = AuthService(db)
-        await auth_service.revoke_refresh_token(refresh_token)
+        await auth_service.revoke_refresh_token(body.refresh_token)
     
     return {"message": "Successfully logged out"}
 
